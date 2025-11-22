@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Reception interface for student pickup sign-out">
+    <title>Reception - Student Pickup</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .reception-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+
+        .sign-out-form {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .queue-section {
+            margin-top: var(--spacing-xl);
+        }
+
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .queue-list {
+            display: grid;
+            gap: var(--spacing-sm);
+        }
+
+        .queue-item {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--transition-normal);
+        }
+
+        .queue-item:hover {
+            border-color: var(--border-light);
+            transform: translateX(5px);
+        }
+
+        .queue-item-info h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .queue-item-meta {
+            display: flex;
+            gap: var(--spacing-md);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .waiting-time {
+            font-weight: 600;
+        }
+
+        .waiting-time.warning {
+            color: var(--warning);
+        }
+
+        .waiting-time.danger {
+            color: var(--danger);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: var(--spacing-md);
+            opacity: 0.5;
+        }
+
+        .success-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--gradient-success);
+            color: white;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+            z-index: 1000;
+            font-weight: 600;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: var(--spacing-lg);
+            transition: color var(--transition-fast);
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="reception-container">
+        <a href="index.html" class="back-link">← Back to Home</a>
+
+        <div class="header">
+            <h1>📝 Reception Sign-Out</h1>
+        </div>
+
+        <div class="sign-out-form">
+            <h2 class="mb-md">Sign Out Student</h2>
+
+            <form id="signOutForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="yearSelect">Year</label>
+                        <select id="yearSelect" class="form-control form-control-lg" required>
+                            <option value="">Select Year</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="classSelect">Class</label>
+                        <select id="classSelect" class="form-control form-control-lg" required disabled>
+                            <option value="">Select Class</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="studentSelect">Student Name</label>
+                    <select id="studentSelect" class="form-control form-control-lg" required disabled>
+                        <option value="">Select Student</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-xl w-full" id="submitBtn">
+                    Sign Out Student
+                </button>
+            </form>
+        </div>
+
+        <div class="queue-section">
+            <div class="queue-header">
+                <h2>📋 Current Pickup Queue</h2>
+                <span class="badge badge-success" id="queueCount">0 pending</span>
+            </div>
+
+            <div class="queue-list" id="queueList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">✅</div>
+                    <p>No pending pickups</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let students = [];
+        let pendingPickups = [];
+
+        // Load years on page load
+        async function loadYears() {
+            try {
+                const response = await fetch('/api/years');
+                const years = await response.json();
+
+                const yearSelect = document.getElementById('yearSelect');
+                years.forEach(({ year }) => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = `Year ${year}`;
+                    yearSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading years:', error);
+            }
+        }
+
+        // Load classes when year is selected
+        document.getElementById('yearSelect').addEventListener('change', async (e) => {
+            const year = e.target.value;
+            const classSelect = document.getElementById('classSelect');
+            const studentSelect = document.getElementById('studentSelect');
+
+            classSelect.innerHTML = '<option value="">Select Class</option>';
+            studentSelect.innerHTML = '<option value="">Select Student</option>';
+            studentSelect.disabled = true;
+
+            if (!year) {
+                classSelect.disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/classes/${year}`);
+                const classes = await response.json();
+
+                classes.forEach(({ class: className }) => {
+                    const option = document.createElement('option');
+                    option.value = className;
+                    option.textContent = className.charAt(0).toUpperCase() + className.slice(1);
+                    classSelect.appendChild(option);
+                });
+
+                classSelect.disabled = false;
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        });
+
+        // Load students when class is selected
+        document.getElementById('classSelect').addEventListener('change', async (e) => {
+            const className = e.target.value;
+            const year = document.getElementById('yearSelect').value;
+            const studentSelect = document.getElementById('studentSelect');
+
+            studentSelect.innerHTML = '<option value="">Select Student</option>';
+
+            if (!className) {
+                studentSelect.disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/students/${year}/${className}`);
+                students = await response.json();
+
+                students.forEach((student) => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = student.name;
+                    option.dataset.studentName = student.name;
+                    option.dataset.year = student.year;
+                    option.dataset.class = student.class;
+                    studentSelect.appendChild(option);
+                });
+
+                studentSelect.disabled = false;
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('signOutForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const studentSelect = document.getElementById('studentSelect');
+            const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+
+            const pickupData = {
+                student_id: parseInt(selectedOption.value),
+                student_name: selectedOption.dataset.studentName,
+                year: parseInt(selectedOption.dataset.year),
+                class: selectedOption.dataset.class
+            };
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span> Signing Out...';
+
+            try {
+                const response = await fetch('/api/pickups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pickupData)
+                });
+
+                if (response.ok) {
+                    showSuccessMessage(`${pickupData.student_name} signed out successfully!`);
+
+                    // Reset form
+                    document.getElementById('signOutForm').reset();
+                    document.getElementById('classSelect').disabled = true;
+                    document.getElementById('studentSelect').disabled = true;
+
+                    // Reload queue
+                    loadPendingPickups();
+                }
+            } catch (error) {
+                console.error('Error signing out student:', error);
+                alert('Error signing out student. Please try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Sign Out Student';
+            }
+        });
+
+        // Show success message
+        function showSuccessMessage(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = message;
+            document.body.appendChild(successDiv);
+
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        // Load pending pickups
+        async function loadPendingPickups() {
+            try {
+                const response = await fetch('/api/pickups/pending');
+                pendingPickups = await response.json();
+
+                renderQueue();
+            } catch (error) {
+                console.error('Error loading pending pickups:', error);
+            }
+        }
+
+        // Render queue
+        function renderQueue() {
+            const queueList = document.getElementById('queueList');
+            const queueCount = document.getElementById('queueCount');
+
+            queueCount.textContent = `${pendingPickups.length} pending`;
+
+            if (pendingPickups.length === 0) {
+                queueList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">✅</div>
+            <p>No pending pickups</p>
+          </div>
+        `;
+                return;
+            }
+
+            queueList.innerHTML = pendingPickups.map(pickup => {
+                const waitTime = Math.floor((Date.now() - pickup.timestamp) / 1000 / 60);
+                let waitClass = '';
+                if (waitTime > 5) waitClass = 'danger';
+                else if (waitTime > 2) waitClass = 'warning';
+
+                return `
+          <div class="queue-item">
+            <div class="queue-item-info">
+              <h3>${pickup.student_name}</h3>
+              <div class="queue-item-meta">
+                <span>Year ${pickup.year} ${pickup.class.charAt(0).toUpperCase() + pickup.class.slice(1)}</span>
+                <span class="waiting-time ${waitClass}">⏱️ ${waitTime} min${waitTime !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            <span class="badge badge-warning">Pending</span>
+          </div>
+        `;
+            }).join('');
+        }
+
+        // Auto-refresh queue every 5 seconds
+        setInterval(loadPendingPickups, 5000);
+
+        // Initialize
+        loadYears();
+        loadPendingPickups();
+    </script>
+</body>
+
+</html>
