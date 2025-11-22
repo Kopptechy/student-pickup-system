@@ -1,0 +1,19 @@
+{
+  "name": "student-pickup-system",
+  "version": "1.0.0",
+  "description": "Real-time student pickup notification system for schools",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["school", "pickup", "notification", "real-time"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "better-sqlite3": "^9.2.2",
+    "uuid": "^9.0.1"
+  }
+}
