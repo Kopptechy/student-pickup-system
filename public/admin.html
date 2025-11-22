@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Admin panel for student pickup system">
+    <title>Admin Panel - Student Pickup</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+        }
+
+        .tabs {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .stat-card {
+            background: var(--gradient-primary);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.9;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .stat-card .stat-value {
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .table-container {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--bg-dark);
+        }
+
+        th {
+            padding: var(--spacing-md);
+            text-align: left;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border);
+        }
+
+        td {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr {
+            transition: background var(--transition-fast);
+        }
+
+        tbody tr:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .modal-header h2 {
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 2rem;
+            cursor: pointer;
+            transition: color var(--transition-fast);
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            color: var(--danger);
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: var(--spacing-lg);
+            transition: color var(--transition-fast);
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+
+        .empty-table {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-container">
+        <a href="index.html" class="back-link">← Back to Home</a>
+
+        <div class="header">
+            <h1>⚙️ Admin Panel</h1>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Students</h3>
+                <div class="stat-value" id="totalStudents">0</div>
+            </div>
+            <div class="stat-card" style="background: var(--gradient-success);">
+                <h3>Pending Pickups</h3>
+                <div class="stat-value" id="pendingPickups">0</div>
+            </div>
+            <div class="stat-card" style="background: var(--gradient-warning);">
+                <h3>Total Classes</h3>
+                <div class="stat-value">17</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('students')">Students</button>
+            <button class="tab" onclick="switchTab('history')">Pickup History</button>
+        </div>
+
+        <!-- Students Tab -->
+        <div id="studentsTab" class="tab-content active">
+            <div class="filter-bar">
+                <div class="search-box">
+                    <input type="text" id="searchInput" class="form-control" placeholder="🔍 Search students...">
+                </div>
+                <select id="filterYear" class="form-control">
+                    <option value="">All Years</option>
+                </select>
+                <select id="filterClass" class="form-control">
+                    <option value="">All Classes</option>
+                </select>
+                <button class="btn btn-primary" onclick="openAddStudentModal()">+ Add Student</button>
+                <button class="btn btn-success" onclick="openBatchUploadModal()">📋 Batch Upload</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Year</th>
+                            <th>Class</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody">
+                        <tr>
+                            <td colspan="4" class="empty-table">Loading students...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="historyTab" class="tab-content">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Year</th>
+                            <th>Class</th>
+                            <th>Signed Out</th>
+                            <th>Acknowledged</th>
+                            <th>Wait Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr>
+                            <td colspan="6" class="empty-table">Loading history...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Student Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Student</h2>
+                <button class="close-btn" onclick="closeStudentModal()">×</button>
+            </div>
+
+            <form id="studentForm">
+                <input type="hidden" id="studentId">
+
+                <div class="form-group">
+                    <label class="form-label" for="studentName">Student Name</label>
+                    <input type="text" id="studentName" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="studentYear">Year</label>
+                    <select id="studentYear" class="form-control" required>
+                        <option value="">Select Year</option>
+                        <option value="7">Year 7</option>
+                        <option value="8">Year 8</option>
+                        <option value="9">Year 9</option>
+                        <option value="10">Year 10</option>
+                        <option value="11">Year 11</option>
+                        <option value="12">Year 12</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="studentClass">Class</label>
+                    <select id="studentClass" class="form-control" required>
+                        <option value="">Select Class</option>
+                        <option value="blue">Blue</option>
+                        <option value="green">Green</option>
+                        <option value="red">Red</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-md mt-lg">
+                    <button type="button" class="btn btn-secondary flex-1" onclick="closeStudentModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary flex-1">Save Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Batch Upload Modal -->
+    <div id="batchUploadModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>📋 Batch Upload Students</h2>
+                <button class="close-btn" onclick="closeBatchUploadModal()">×</button>
+            </div>
+
+            <form id="batchUploadForm">
+                <div class="form-group">
+                    <label class="form-label" for="batchStudentNames">Student Names (one per line)</label>
+                    <textarea id="batchStudentNames" class="form-control" rows="10" placeholder="Enter student names, one per line:
+
+John Smith
+Emma Johnson
+Michael Brown
+Sophia Davis
+..." required style="font-family: monospace; resize: vertical; min-height: 200px;"></textarea>
+                    <small style="color: var(--text-muted); margin-top: 0.5rem; display: block;">
+                        💡 Tip: You can paste a list of names from Excel or any text file
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="batchYear">Year</label>
+                    <select id="batchYear" class="form-control" required>
+                        <option value="">Select Year</option>
+                        <option value="7">Year 7</option>
+                        <option value="8">Year 8</option>
+                        <option value="9">Year 9</option>
+                        <option value="10">Year 10</option>
+                        <option value="11">Year 11</option>
+                        <option value="12">Year 12</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="batchClass">Class</label>
+                    <select id="batchClass" class="form-control" required>
+                        <option value="">Select Class</option>
+                        <option value="blue">Blue</option>
+                        <option value="green">Green</option>
+                        <option value="red">Red</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-md mt-lg">
+                    <button type="button" class="btn btn-secondary flex-1"
+                        onclick="closeBatchUploadModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success flex-1">Upload Students</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let students = [];
+        let history = [];
+        let editingStudentId = null;
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+
+            if (tabName === 'history') {
+                loadHistory();
+            }
+        }
+
+        // Load students
+        async function loadStudents() {
+            try {
+                const response = await fetch('/api/students');
+                students = await response.json();
+
+                document.getElementById('totalStudents').textContent = students.length;
+
+                populateFilters();
+                filterStudents();
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        }
+
+        // Populate filter dropdowns
+        function populateFilters() {
+            const years = [...new Set(students.map(s => s.year))].sort();
+            const filterYear = document.getElementById('filterYear');
+
+            filterYear.innerHTML = '<option value="">All Years</option>';
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = `Year ${year}`;
+                filterYear.appendChild(option);
+            });
+        }
+
+        // Filter students
+        function filterStudents() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filterYear = document.getElementById('filterYear').value;
+            const filterClass = document.getElementById('filterClass').value;
+
+            let filtered = students.filter(student => {
+                const matchesSearch = student.name.toLowerCase().includes(searchTerm);
+                const matchesYear = !filterYear || student.year == filterYear;
+                const matchesClass = !filterClass || student.class === filterClass;
+                return matchesSearch && matchesYear && matchesClass;
+            });
+
+            renderStudents(filtered);
+        }
+
+        // Render students table
+        function renderStudents(studentsToRender) {
+            const tbody = document.getElementById('studentsTableBody');
+
+            if (studentsToRender.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-table">No students found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = studentsToRender.map(student => `
+        <tr>
+          <td><strong>${student.name}</strong></td>
+          <td>Year ${student.year}</td>
+          <td>${student.class.charAt(0).toUpperCase() + student.class.slice(1)}</td>
+          <td class="action-buttons">
+            <button class="btn btn-primary btn-sm" onclick="editStudent(${student.id})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${student.name}')">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+        }
+
+        // Open add student modal
+        function openAddStudentModal() {
+            editingStudentId = null;
+            document.getElementById('modalTitle').textContent = 'Add Student';
+            document.getElementById('studentForm').reset();
+            document.getElementById('studentModal').classList.add('active');
+        }
+
+        // Open batch upload modal
+        function openBatchUploadModal() {
+            document.getElementById('batchUploadForm').reset();
+            document.getElementById('batchUploadModal').classList.add('active');
+        }
+
+        // Close batch upload modal
+        function closeBatchUploadModal() {
+            document.getElementById('batchUploadModal').classList.remove('active');
+            document.getElementById('batchUploadForm').reset();
+        }
+
+        // Handle batch upload form submission
+        document.getElementById('batchUploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const namesText = document.getElementById('batchStudentNames').value;
+            const year = document.getElementById('batchYear').value;
+            const className = document.getElementById('batchClass').value;
+
+            // Split by newlines and filter out empty lines
+            const names = namesText
+                .split('\n')
+                .map(name => name.trim())
+                .filter(name => name.length > 0);
+
+            if (names.length === 0) {
+                alert('Please enter at least one student name.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/students/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        names: names,
+                        year: parseInt(year),
+                        class: className
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(result.message);
+                    closeBatchUploadModal();
+                    loadStudents();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error uploading students:', error);
+                alert('Error uploading students. Please try again.');
+            }
+        });
+
+        // Edit student
+        function editStudent(id) {
+            const student = students.find(s => s.id === id);
+            if (!student) return;
+
+            editingStudentId = id;
+            document.getElementById('modalTitle').textContent = 'Edit Student';
+            document.getElementById('studentName').value = student.name;
+            document.getElementById('studentYear').value = student.year;
+            document.getElementById('studentClass').value = student.class;
+            document.getElementById('studentModal').classList.add('active');
+        }
+
+        // Close modal
+        function closeStudentModal() {
+            document.getElementById('studentModal').classList.remove('active');
+            document.getElementById('studentForm').reset();
+            editingStudentId = null;
+        }
+
+        // Handle form submission
+        document.getElementById('studentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const studentData = {
+                name: document.getElementById('studentName').value,
+                year: parseInt(document.getElementById('studentYear').value),
+                class: document.getElementById('studentClass').value
+            };
+
+            try {
+                let response;
+                if (editingStudentId) {
+                    response = await fetch(`/api/students/${editingStudentId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(studentData)
+                    });
+                } else {
+                    response = await fetch('/api/students', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(studentData)
+                    });
+                }
+
+                if (response.ok) {
+                    closeStudentModal();
+                    loadStudents();
+                }
+            } catch (error) {
+                console.error('Error saving student:', error);
+                alert('Error saving student. Please try again.');
+            }
+        });
+
+        // Delete student
+        async function deleteStudent(id, name) {
+            if (!confirm(`Are you sure you want to delete ${name}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/students/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadStudents();
+                }
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                alert('Error deleting student. Please try again.');
+            }
+        }
+
+        // Load pickup history
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/pickups/history');
+                history = await response.json();
+                renderHistory();
+            } catch (error) {
+                console.error('Error loading history:', error);
+            }
+        }
+
+        // Render history table
+        function renderHistory() {
+            const tbody = document.getElementById('historyTableBody');
+
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-table">No pickup history</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = history.map(pickup => {
+                const signedOut = new Date(pickup.timestamp).toLocaleString();
+                const acknowledged = pickup.acknowledged_at ? new Date(pickup.acknowledged_at).toLocaleString() : 'N/A';
+                const waitTime = pickup.acknowledged_at
+                    ? Math.floor((pickup.acknowledged_at - pickup.timestamp) / 1000 / 60) + ' mins'
+                    : 'N/A';
+
+                return `
+          <tr>
+            <td><strong>${pickup.student_name}</strong></td>
+            <td>Year ${pickup.year}</td>
+            <td>${pickup.class.charAt(0).toUpperCase() + pickup.class.slice(1)}</td>
+            <td>${signedOut}</td>
+            <td>${acknowledged}</td>
+            <td>${waitTime}</td>
+          </tr>
+        `;
+            }).join('');
+        }
+
+        // Load pending pickups count
+        async function loadPendingCount() {
+            try {
+                const response = await fetch('/api/pickups/pending');
+                const pickups = await response.json();
+                document.getElementById('pendingPickups').textContent = pickups.length;
+            } catch (error) {
+                console.error('Error loading pending pickups:', error);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', filterStudents);
+        document.getElementById('filterYear').addEventListener('change', filterStudents);
+        document.getElementById('filterClass').addEventListener('change', filterStudents);
+
+        // Update year dropdown to show/hide green class
+        document.getElementById('studentYear').addEventListener('change', (e) => {
+            const year = parseInt(e.target.value);
+            const classSelect = document.getElementById('studentClass');
+            const greenOption = classSelect.querySelector('option[value="green"]');
+
+            if (year === 12) {
+                greenOption.style.display = 'none';
+                if (classSelect.value === 'green') {
+                    classSelect.value = '';
+                }
+            } else {
+                greenOption.style.display = 'block';
+            }
+        });
+
+        // Update batch year dropdown to show/hide green class
+        document.getElementById('batchYear').addEventListener('change', (e) => {
+            const year = parseInt(e.target.value);
+            const classSelect = document.getElementById('batchClass');
+            const greenOption = classSelect.querySelector('option[value="green"]');
+
+            if (year === 12) {
+                greenOption.style.display = 'none';
+                if (classSelect.value === 'green') {
+                    classSelect.value = '';
+                }
+            } else {
+                greenOption.style.display = 'block';
+            }
+        });
+
+        // Close modal on outside click
+        document.getElementById('studentModal').addEventListener('click', (e) => {
+            if (e.target.id === 'studentModal') {
+                closeStudentModal();
+            }
+        });
+
+        document.getElementById('batchUploadModal').addEventListener('click', (e) => {
+            if (e.target.id === 'batchUploadModal') {
+                closeBatchUploadModal();
+            }
+        });
+
+        // Initialize
+        loadStudents();
+        loadPendingCount();
+
+        // Auto-refresh pending count
+        setInterval(loadPendingCount, 10000);
+    </script>
+</body>
+
+</html>
