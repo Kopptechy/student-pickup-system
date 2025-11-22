@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Classroom display for student pickup notifications">
+    <title>Classroom Display - Student Pickup</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .display-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: var(--spacing-lg);
+        }
+
+        .display-header {
+            background: var(--gradient-primary);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+
+        .display-header h1 {
+            font-size: 3rem;
+            margin: 0;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .class-info {
+            font-size: 1.5rem;
+            opacity: 0.9;
+            margin-top: var(--spacing-xs);
+        }
+
+        .pickups-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-md);
+        }
+
+        .pickup-card {
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-lg);
+            animation: slideInLeft 0.5s ease;
+            transition: all var(--transition-normal);
+        }
+
+        .pickup-card.new {
+            border-color: var(--success);
+            animation: slideInLeft 0.5s ease, glow 2s ease-in-out infinite;
+        }
+
+        .pickup-card.warning {
+            border-color: var(--warning);
+        }
+
+        .pickup-card.danger {
+            border-color: var(--danger);
+            animation: slideInLeft 0.5s ease, pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .pickup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .student-name {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin: 0;
+        }
+
+        .waiting-badge {
+            font-size: 2rem;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .waiting-badge.new {
+            background: var(--gradient-success);
+        }
+
+        .waiting-badge.warning {
+            background: var(--gradient-warning);
+            color: var(--bg-dark);
+        }
+
+        .waiting-badge.danger {
+            background: var(--gradient-danger);
+        }
+
+        .acknowledge-btn {
+            margin-top: var(--spacing-md);
+            width: 100%;
+            font-size: 2rem;
+            padding: var(--spacing-lg);
+        }
+
+        .empty-state {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 8rem;
+            margin-bottom: var(--spacing-lg);
+            opacity: 0.5;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .empty-state h2 {
+            font-size: 2.5rem;
+            color: var(--text-secondary);
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            z-index: 1000;
+        }
+
+        .connection-status.connected {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid var(--success);
+            color: var(--success);
+        }
+
+        .connection-status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid var(--danger);
+            color: var(--danger);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .acknowledging {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        @media (max-width: 1024px) {
+            .display-header h1 {
+                font-size: 2rem;
+            }
+
+            .student-name {
+                font-size: 2.5rem;
+            }
+
+            .waiting-badge {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="connection-status disconnected" id="connectionStatus">
+        <span class="status-dot"></span>
+        <span>Connecting...</span>
+    </div>
+
+    <div class="display-container">
+        <div class="display-header">
+            <h1>📺 Student Pickup Display</h1>
+            <div class="class-info" id="classInfo">Loading...</div>
+        </div>
+
+        <div class="pickups-container" id="pickupsContainer">
+            <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <h2>No Pending Pickups</h2>
+                <p style="font-size: 1.5rem; margin-top: var(--spacing-md);">Waiting for notifications...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio notification -->
+    <audio id="notificationSound" preload="auto">
+        <source
+            src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGS57OihUBELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBSp+zPLaizsKGGS56+mjUhELTKXh8bllHAU2jdXzzn0vBQ=="
+            type="audio/wav">
+    </audio>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const year = parseInt(urlParams.get('year')) || 7;
+        const className = urlParams.get('class') || 'blue';
+
+        let ws = null;
+        let pickups = [];
+        let reconnectTimeout = null;
+
+        // Update class info
+        document.getElementById('classInfo').textContent = `Year ${year} ${className.charAt(0).toUpperCase() + className.slice(1)}`;
+
+        // WebSocket connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateConnectionStatus(true);
+
+                // Subscribe to this class
+                ws.send(JSON.stringify({
+                    type: 'subscribe',
+                    year: year,
+                    className: className
+                }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                switch (data.type) {
+                    case 'initial':
+                        pickups = data.pickups;
+                        renderPickups();
+                        break;
+
+                    case 'new_pickup':
+                        pickups.push(data.pickup);
+                        renderPickups();
+                        playNotificationSound();
+                        break;
+
+                    case 'pickup_acknowledged':
+                        pickups = pickups.filter(p => p.id !== data.pickupId);
+                        renderPickups();
+                        break;
+
+                    case 'heartbeat':
+                        // Keep connection alive
+                        break;
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus(false);
+
+                // Attempt to reconnect after 3 seconds
+                reconnectTimeout = setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                statusEl.innerHTML = '<span class="status-dot"></span><span>Connected</span>';
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                statusEl.innerHTML = '<span class="status-dot"></span><span>Reconnecting...</span>';
+            }
+        }
+
+        // Play notification sound
+        function playNotificationSound() {
+            const audio = document.getElementById('notificationSound');
+            audio.play().catch(e => console.log('Audio play failed:', e));
+        }
+
+        // Render pickups
+        function renderPickups() {
+            const container = document.getElementById('pickupsContainer');
+
+            if (pickups.length === 0) {
+                container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">✅</div>
+            <h2>No Pending Pickups</h2>
+            <p style="font-size: 1.5rem; margin-top: var(--spacing-md);">Waiting for notifications...</p>
+          </div>
+        `;
+                return;
+            }
+
+            container.innerHTML = pickups.map(pickup => {
+                const waitTime = Math.floor((Date.now() - pickup.timestamp) / 1000 / 60);
+                let statusClass = 'new';
+                let statusText = `${waitTime} min${waitTime !== 1 ? 's' : ''}`;
+
+                if (waitTime > 5) {
+                    statusClass = 'danger';
+                    statusText = `⚠️ ${waitTime} mins - URGENT`;
+                } else if (waitTime > 2) {
+                    statusClass = 'warning';
+                    statusText = `⏱️ ${waitTime} mins`;
+                } else {
+                    statusText = `🆕 ${waitTime} min${waitTime !== 1 ? 's' : ''}`;
+                }
+
+                return `
+          <div class="pickup-card ${statusClass}" id="pickup-${pickup.id}">
+            <div class="pickup-header">
+              <h2 class="student-name">${pickup.student_name}</h2>
+              <div class="waiting-badge ${statusClass}">${statusText}</div>
+            </div>
+            <button class="btn btn-success btn-xl acknowledge-btn" onclick="acknowledgePickup('${pickup.id}')">
+              ✅ Student Sent Down
+            </button>
+          </div>
+        `;
+            }).join('');
+        }
+
+        // Acknowledge pickup
+        async function acknowledgePickup(pickupId) {
+            const card = document.getElementById(`pickup-${pickupId}`);
+            card.classList.add('acknowledging');
+
+            try {
+                const response = await fetch(`/api/pickups/${pickupId}/acknowledge`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    // Remove from local array (will also be removed via WebSocket)
+                    pickups = pickups.filter(p => p.id !== pickupId);
+                    renderPickups();
+                }
+            } catch (error) {
+                console.error('Error acknowledging pickup:', error);
+                card.classList.remove('acknowledging');
+                alert('Error acknowledging pickup. Please try again.');
+            }
+        }
+
+        // Update waiting times every 30 seconds
+        setInterval(() => {
+            if (pickups.length > 0) {
+                renderPickups();
+            }
+        }, 30000);
+
+        // Initialize
+        connectWebSocket();
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+        });
+    </script>
+</body>
+
+</html>
