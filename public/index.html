@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Student pickup system landing page">
+  <title>Student Pickup System</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .hero {
+      min-height: 80vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .hero-content {
+      max-width: 800px;
+    }
+
+    .hero h1 {
+      font-size: 4rem;
+      font-weight: 800;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: var(--spacing-md);
+      animation: fadeInUp 0.8s ease;
+    }
+
+    .hero p {
+      font-size: 1.5rem;
+      color: var(--text-secondary);
+      margin-bottom: var(--spacing-xl);
+      animation: fadeInUp 0.8s ease 0.2s backwards;
+    }
+
+    .nav-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: var(--spacing-lg);
+      margin-top: var(--spacing-xl);
+      animation: fadeInUp 0.8s ease 0.4s backwards;
+    }
+
+    .nav-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      text-align: center;
+      transition: all var(--transition-normal);
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .nav-card:hover {
+      transform: translateY(-10px);
+      border-color: var(--primary);
+      box-shadow: var(--shadow-lg), var(--shadow-glow);
+    }
+
+    .nav-card-icon {
+      font-size: 4rem;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .nav-card h2 {
+      font-size: 1.75rem;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .nav-card p {
+      color: var(--text-secondary);
+      font-size: 1rem;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+      .hero p {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-content">
+      <h1>Student Pickup System</h1>
+      <p>Streamlined, real-time notifications for efficient student pickups</p>
+      
+      <div class="nav-cards">
+        <a href="reception.html" class="nav-card">
+          <div class="nav-card-icon">📝</div>
+          <h2>Reception</h2>
+          <p>Sign out students for pickup</p>
+        </a>
+
+        <a href="display.html?year=7&class=blue" class="nav-card">
+          <div class="nav-card-icon">📺</div>
+          <h2>Classroom Display</h2>
+          <p>View pickups for your class</p>
+        </a>
+
+        <a href="admin.html" class="nav-card">
+          <div class="nav-card-icon">⚙️</div>
+          <h2>Admin Panel</h2>
+          <p>Manage students and settings</p>
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
