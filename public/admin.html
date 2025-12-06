@@ -289,12 +289,16 @@
                 </select>
                 <button class="btn btn-primary" onclick="openAddStudentModal()">+ Add Student</button>
                 <button class="btn btn-success" onclick="openBatchUploadModal()">📋 Batch Upload</button>
+                <button class="btn btn-warning" onclick="deleteSelected()" id="deleteSelectedBtn"
+                    style="display:none;">🗑️ Delete Selected (<span id="selectedCount">0</span>)</button>
+                <button class="btn btn-danger" onclick="deleteAllStudents()">🗑️ Delete All</button>
             </div>
 
             <div class="table-container">
                 <table>
                     <thead>
                         <tr>
+                            <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                             <th>Name</th>
                             <th>Year</th>
                             <th>Class</th>
@@ -303,7 +307,7 @@
                     </thead>
                     <tbody id="studentsTableBody">
                         <tr>
-                            <td colspan="4" class="empty-table">Loading students...</td>
+                            <td colspan="5" class="empty-table">Loading students...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -504,12 +508,13 @@ Sophia Davis
             const tbody = document.getElementById('studentsTableBody');
 
             if (studentsToRender.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-table">No students found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-table">No students found</td></tr>';
                 return;
             }
 
             tbody.innerHTML = studentsToRender.map(student => `
         <tr>
+          <td><input type="checkbox" class="student-checkbox" data-id="${student.id}" onchange="updateSelectedCount()"></td>
           <td><strong>${student.name}</strong></td>
           <td>Year ${student.year}</td>
           <td>${student.class.charAt(0).toUpperCase() + student.class.slice(1)}</td>
@@ -519,6 +524,8 @@ Sophia Davis
           </td>
         </tr>
       `).join('');
+
+            updateSelectedCount();
         }
 
         // Open add student modal
@@ -659,6 +666,97 @@ Sophia Davis
             } catch (error) {
                 console.error('Error deleting student:', error);
                 alert('Error deleting student. Please try again.');
+            }
+        }
+
+        // Delete all students
+        async function deleteAllStudents() {
+            const count = students.length;
+
+            if (count === 0) {
+                alert('There are no students to delete.');
+                return;
+            }
+
+            if (!confirm(`⚠️ WARNING: This will delete ALL ${count} students from the database!\n\nThis action cannot be undone. Are you absolutely sure?`)) {
+                return;
+            }
+
+            // Double confirmation
+            if (!confirm(`Final confirmation: Delete all ${count} students?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/students', {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(result.message);
+                    loadStudents();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error deleting all students:', error);
+                alert('Error deleting students. Please try again.');
+            }
+        }
+
+        // Toggle select all checkboxes
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.student-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateSelectedCount();
+        }
+
+        // Update selected count and show/hide delete button
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+            const count = checkboxes.length;
+            const deleteBtn = document.getElementById('deleteSelectedBtn');
+            const countSpan = document.getElementById('selectedCount');
+
+            countSpan.textContent = count;
+            deleteBtn.style.display = count > 0 ? 'inline-block' : 'none';
+
+            // Update select all checkbox state
+            const allCheckboxes = document.querySelectorAll('.student-checkbox');
+            const selectAll = document.getElementById('selectAll');
+            selectAll.checked = allCheckboxes.length > 0 && count === allCheckboxes.length;
+        }
+
+        // Delete selected students
+        async function deleteSelected() {
+            const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+            const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+
+            if (selectedIds.length === 0) {
+                alert('No students selected.');
+                return;
+            }
+
+            if (!confirm(`Delete ${selectedIds.length} selected student(s)?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                // Delete each student
+                const deletePromises = selectedIds.map(id =>
+                    fetch(`/api/students/${id}`, { method: 'DELETE' })
+                );
+
+                await Promise.all(deletePromises);
+
+                alert(`Successfully deleted ${selectedIds.length} student(s)`);
+                loadStudents();
+            } catch (error) {
+                console.error('Error deleting selected students:', error);
+                alert('Error deleting students. Please try again.');
             }
         }
 
