@@ -64,9 +64,7 @@ class PickupDatabase {
     console.log('Seeding database with mock student data...');
 
     const firstNames = [
-      'James', 'Emma', '
-
-Oliver', 'Sophia', 'William', 'Ava', 'Benjamin', 'Isabella',
+      'James', 'Emma', 'Oliver', 'Sophia', 'William', 'Ava', 'Benjamin', 'Isabella',
       'Lucas', 'Mia', 'Henry', 'Charlotte', 'Alexander', 'Amelia', 'Michael', 'Harper',
       'Daniel', 'Evelyn', 'Matthew', 'Abigail', 'Joseph', 'Emily', 'David', 'Elizabeth',
       'Samuel', 'Sofia', 'Jackson', 'Avery', 'Sebastian', 'Ella', 'Gabriel', 'Scarlett',
