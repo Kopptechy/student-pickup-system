@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const db = new PickupDatabase();
+let db;
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -23,7 +23,7 @@ const classConnections = new Map();
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection');
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
 
@@ -41,7 +41,7 @@ wss.on('connection', (ws, req) => {
                 console.log(`Client subscribed to ${classKey}`);
 
                 // Send current pending pickups for this class
-                const pendingPickups = db.getPendingPickupsByClass(year, className);
+                const pendingPickups = await db.getPendingPickupsByClass(year, className);
                 ws.send(JSON.stringify({
                     type: 'initial',
                     pickups: pendingPickups
@@ -89,9 +89,9 @@ function broadcastToClass(year, className, data) {
 // API Routes
 
 // Get all students
-app.get('/api/students', (req, res) => {
+app.get('/api/students', async (req, res) => {
     try {
-        const students = db.getAllStudents();
+        const students = await db.getAllStudents();
         res.json(students);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -99,10 +99,10 @@ app.get('/api/students', (req, res) => {
 });
 
 // Get students by class
-app.get('/api/students/:year/:class', (req, res) => {
+app.get('/api/students/:year/:class', async (req, res) => {
     try {
         const { year, class: className } = req.params;
-        const students = db.getStudentsByClass(parseInt(year), className);
+        const students = await db.getStudentsByClass(parseInt(year), className);
         res.json(students);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -110,9 +110,9 @@ app.get('/api/students/:year/:class', (req, res) => {
 });
 
 // Get all years
-app.get('/api/years', (req, res) => {
+app.get('/api/years', async (req, res) => {
     try {
-        const years = db.getYears();
+        const years = await db.getYears();
         res.json(years);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -120,10 +120,10 @@ app.get('/api/years', (req, res) => {
 });
 
 // Get classes for a year
-app.get('/api/classes/:year', (req, res) => {
+app.get('/api/classes/:year', async (req, res) => {
     try {
         const { year } = req.params;
-        const classes = db.getClassesByYear(parseInt(year));
+        const classes = await db.getClassesByYear(parseInt(year));
         res.json(classes);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -131,7 +131,7 @@ app.get('/api/classes/:year', (req, res) => {
 });
 
 // Create a new pickup
-app.post('/api/pickups', (req, res) => {
+app.post('/api/pickups', async (req, res) => {
     try {
         const { student_id, student_name, year, class: className } = req.body;
 
@@ -144,7 +144,7 @@ app.post('/api/pickups', (req, res) => {
             timestamp: Date.now()
         };
 
-        db.addPickup(pickupData);
+        await db.addPickup(pickupData);
 
         // Broadcast to the specific class
         broadcastToClass(year, className, {
@@ -159,9 +159,9 @@ app.post('/api/pickups', (req, res) => {
 });
 
 // Get all pending pickups
-app.get('/api/pickups/pending', (req, res) => {
+app.get('/api/pickups/pending', async (req, res) => {
     try {
-        const pickups = db.getPendingPickups();
+        const pickups = await db.getPendingPickups();
         res.json(pickups);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -169,10 +169,10 @@ app.get('/api/pickups/pending', (req, res) => {
 });
 
 // Get pending pickups for a class
-app.get('/api/pickups/pending/:year/:class', (req, res) => {
+app.get('/api/pickups/pending/:year/:class', async (req, res) => {
     try {
         const { year, class: className } = req.params;
-        const pickups = db.getPendingPickupsByClass(parseInt(year), className);
+        const pickups = await db.getPendingPickupsByClass(parseInt(year), className);
         res.json(pickups);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -180,18 +180,19 @@ app.get('/api/pickups/pending/:year/:class', (req, res) => {
 });
 
 // Acknowledge a pickup
-app.post('/api/pickups/:id/acknowledge', (req, res) => {
+app.post('/api/pickups/:id/acknowledge', async (req, res) => {
     try {
         const { id } = req.params;
 
         // Get pickup details before acknowledging
-        const pickup = db.getPendingPickups().find(p => p.id === id);
+        const allPickups = await db.getPendingPickups();
+        const pickup = allPickups.find(p => p.id === id);
 
         if (!pickup) {
             return res.status(404).json({ error: 'Pickup not found' });
         }
 
-        db.acknowledgePickup(id);
+        await db.acknowledgePickup(id);
 
         // Broadcast acknowledgment to the class
         broadcastToClass(pickup.year, pickup.class, {
@@ -206,10 +207,10 @@ app.post('/api/pickups/:id/acknowledge', (req, res) => {
 });
 
 // Get pickup history
-app.get('/api/pickups/history', (req, res) => {
+app.get('/api/pickups/history', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 100;
-        const history = db.getPickupHistory(limit);
+        const history = await db.getPickupHistory(limit);
         res.json(history);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -217,18 +218,18 @@ app.get('/api/pickups/history', (req, res) => {
 });
 
 // Add a new student
-app.post('/api/students', (req, res) => {
+app.post('/api/students', async (req, res) => {
     try {
         const { name, year, class: className } = req.body;
-        const result = db.addStudent(name, year, className);
-        res.json({ success: true, id: result.lastInsertRowid });
+        const result = await db.addStudent(name, year, className);
+        res.json({ success: true, id: result.id });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Batch add students
-app.post('/api/students/batch', (req, res) => {
+app.post('/api/students/batch', async (req, res) => {
     try {
         const { names, year, class: className } = req.body;
 
@@ -255,7 +256,7 @@ app.post('/api/students/batch', (req, res) => {
         }
 
         // Add students in batch
-        const count = db.addStudentsBatch(students);
+        const count = await db.addStudentsBatch(students);
 
         res.json({
             success: true,
@@ -268,11 +269,11 @@ app.post('/api/students/batch', (req, res) => {
 });
 
 // Update a student
-app.put('/api/students/:id', (req, res) => {
+app.put('/api/students/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { name, year, class: className } = req.body;
-        db.updateStudent(id, name, year, className);
+        await db.updateStudent(id, name, year, className);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -280,10 +281,10 @@ app.put('/api/students/:id', (req, res) => {
 });
 
 // Delete a student
-app.delete('/api/students/:id', (req, res) => {
+app.delete('/api/students/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        db.deleteStudent(id);
+        await db.deleteStudent(id);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -291,27 +292,46 @@ app.delete('/api/students/:id', (req, res) => {
 });
 
 // Clear old pickups (run daily)
-setInterval(() => {
-    db.clearOldPickups();
-    console.log('Cleared old acknowledged pickups');
+setInterval(async () => {
+    try {
+        await db.clearOldPickups();
+        console.log('Cleared old acknowledged pickups');
+    } catch (error) {
+        console.error('Error clearing old pickups:', error);
+    }
 }, 24 * 60 * 60 * 1000);
 
-// Start server
-server.listen(PORT, () => {
-    console.log(`\n🚀 Student Pickup System running on http://localhost:${PORT}`);
-    console.log(`\n📍 Access points:`);
-    console.log(`   Reception: http://localhost:${PORT}/reception.html`);
-    console.log(`   Display:   http://localhost:${PORT}/display.html?year=7&class=blue`);
-    console.log(`   Admin:     http://localhost:${PORT}/admin.html`);
-    console.log(`\n✅ Database initialized with mock student data`);
-});
+// Initialize database and start server
+async function startServer() {
+    try {
+        // Initialize database
+        db = new PickupDatabase();
+        await db.initializeTables();
+
+        // Start server
+        server.listen(PORT, () => {
+            console.log(`\n🚀 Student Pickup System running on http://localhost:${PORT}`);
+            console.log(`\n📍 Access points:`);
+            console.log(`   Reception: http://localhost:${PORT}/reception.html`);
+            console.log(`   Display:   http://localhost:${PORT}/display.html?year=7&class=blue`);
+            console.log(`   Admin:     http://localhost:${PORT}/admin.html`);
+            console.log(`\n✅ Database initialized and connected`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('\nShutting down gracefully...');
-    db.close();
+    await db.close();
     server.close(() => {
         console.log('Server closed');
         process.exit(0);
     });
 });
+
+// Start the application
+startServer();
