@@ -46,15 +46,8 @@ class PickupDatabase {
         CREATE INDEX IF NOT EXISTS idx_students_class ON students(year, class);
       `);
 
-      // Seed mock data if table is empty
-      const result = await client.query('SELECT COUNT(*) as count FROM students');
-      const count = parseInt(result.rows[0].count);
-
-      if (count === 0) {
-        await this.seedMockData(client);
-      } else {
-        console.log('Database already seeded with student data');
-      }
+      // Mock data seeding disabled - add real students via admin interface
+      console.log('Database ready. Add students through the admin interface.');
     } finally {
       client.release();
     }
@@ -269,6 +262,12 @@ class PickupDatabase {
       [name, year, className, id]
     );
     return result.rows[0];
+  }
+
+  // Delete all students
+  async deleteAllStudents() {
+    const result = await this.pool.query('DELETE FROM students');
+    return result.rowCount;
   }
 
   async close() {
