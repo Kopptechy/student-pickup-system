@@ -291,6 +291,16 @@ app.delete('/api/students/:id', async (req, res) => {
     }
 });
 
+// Delete all students
+app.delete('/api/students', async (req, res) => {
+    try {
+        const count = await db.deleteAllStudents();
+        res.json({ success: true, count: count, message: `Deleted ${count} students` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Clear old pickups (run daily)
 setInterval(async () => {
     try {
