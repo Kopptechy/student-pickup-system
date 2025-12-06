@@ -1,59 +1,72 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Pool } = require('pg');
 
 class PickupDatabase {
   constructor() {
-    this.db = new Database(path.join(__dirname, 'pickup.db'));
+    // Use DATABASE_URL environment variable provided by Render
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    });
+
     this.initializeTables();
-    this.seedMockData();
   }
 
-  initializeTables() {
-    // Students table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        year INTEGER NOT NULL,
-        class TEXT NOT NULL
-      )
-    `);
+  async initializeTables() {
+    const client = await this.pool.connect();
+    try {
+      // Students table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS students (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          year INTEGER NOT NULL,
+          class TEXT NOT NULL
+        )
+      `);
 
-    // Pickups table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS pickups (
-        id TEXT PRIMARY KEY,
-        student_id INTEGER NOT NULL,
-        student_name TEXT NOT NULL,
-        year INTEGER NOT NULL,
-        class TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        status TEXT DEFAULT 'pending',
-        acknowledged_at INTEGER,
-        FOREIGN KEY (student_id) REFERENCES students(id)
-      )
-    `);
+      // Pickups table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS pickups (
+          id TEXT PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          student_name TEXT NOT NULL,
+          year INTEGER NOT NULL,
+          class TEXT NOT NULL,
+          timestamp BIGINT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          acknowledged_at BIGINT,
+          FOREIGN KEY (student_id) REFERENCES students(id)
+        )
+      `);
 
-    // Create indexes for faster queries
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_pickups_status ON pickups(status);
-      CREATE INDEX IF NOT EXISTS idx_pickups_class ON pickups(class);
-      CREATE INDEX IF NOT EXISTS idx_students_class ON students(year, class);
-    `);
-  }
+      // Create indexes for faster queries
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_pickups_status ON pickups(status);
+        CREATE INDEX IF NOT EXISTS idx_pickups_class ON pickups(class);
+        CREATE INDEX IF NOT EXISTS idx_students_class ON students(year, class);
+      `);
 
-  seedMockData() {
-    // Check if data already exists
-    const count = this.db.prepare('SELECT COUNT(*) as count FROM students').get();
-    if (count.count > 0) {
-      console.log('Database already seeded with student data');
-      return;
+      // Seed mock data if table is empty
+      const result = await client.query('SELECT COUNT(*) as count FROM students');
+      const count = parseInt(result.rows[0].count);
+
+      if (count === 0) {
+        await this.seedMockData(client);
+      } else {
+        console.log('Database already seeded with student data');
+      }
+    } finally {
+      client.release();
     }
+  }
 
+  async seedMockData(client) {
     console.log('Seeding database with mock student data...');
 
     const firstNames = [
-      'James', 'Emma', 'Oliver', 'Sophia', 'William', 'Ava', 'Benjamin', 'Isabella',
+      'James', 'Emma', '
+
+Oliver', 'Sophia', 'William', 'Ava', 'Benjamin', 'Isabella',
       'Lucas', 'Mia', 'Henry', 'Charlotte', 'Alexander', 'Amelia', 'Michael', 'Harper',
       'Daniel', 'Evelyn', 'Matthew', 'Abigail', 'Joseph', 'Emily', 'David', 'Elizabeth',
       'Samuel', 'Sofia', 'Jackson', 'Avery', 'Sebastian', 'Ella', 'Gabriel', 'Scarlett',
@@ -69,16 +82,6 @@ class PickupDatabase {
       'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Thompson', 'White', 'Harris',
       'Clark', 'Lewis', 'Robinson', 'Walker', 'Young', 'Allen', 'King', 'Wright'
     ];
-
-    const insert = this.db.prepare(
-      'INSERT INTO students (name, year, class) VALUES (?, ?, ?)'
-    );
-
-    const insertMany = this.db.transaction((students) => {
-      for (const student of students) {
-        insert.run(student.name, student.year, student.class);
-      }
-    });
 
     const students = [];
     let nameIndex = 0;
@@ -116,132 +119,162 @@ class PickupDatabase {
       }
     }
 
-    insertMany(students);
+    // Batch insert students
+    for (const student of students) {
+      await client.query(
+        'INSERT INTO students (name, year, class) VALUES ($1, $2, $3)',
+        [student.name, student.year, student.class]
+      );
+    }
+
     console.log(`Seeded ${students.length} students across 17 classes`);
   }
 
   // Get all students
-  getAllStudents() {
-    return this.db.prepare('SELECT * FROM students ORDER BY year, class, name').all();
+  async getAllStudents() {
+    const result = await this.pool.query('SELECT * FROM students ORDER BY year, class, name');
+    return result.rows;
   }
 
   // Get students by year and class
-  getStudentsByClass(year, className) {
-    return this.db.prepare(
-      'SELECT * FROM students WHERE year = ? AND class = ? ORDER BY name'
-    ).all(year, className);
+  async getStudentsByClass(year, className) {
+    const result = await this.pool.query(
+      'SELECT * FROM students WHERE year = $1 AND class = $2 ORDER BY name',
+      [year, className]
+    );
+    return result.rows;
   }
 
   // Get all years
-  getYears() {
-    return this.db.prepare('SELECT DISTINCT year FROM students ORDER BY year').all();
+  async getYears() {
+    const result = await this.pool.query('SELECT DISTINCT year FROM students ORDER BY year');
+    return result.rows;
   }
 
   // Get classes for a specific year
-  getClassesByYear(year) {
-    return this.db.prepare(
-      'SELECT DISTINCT class FROM students WHERE year = ? ORDER BY class'
-    ).all(year);
+  async getClassesByYear(year) {
+    const result = await this.pool.query(
+      'SELECT DISTINCT class FROM students WHERE year = $1 ORDER BY class',
+      [year]
+    );
+    return result.rows;
   }
 
   // Add a new pickup to the queue
-  addPickup(pickupData) {
-    const insert = this.db.prepare(`
-      INSERT INTO pickups (id, student_id, student_name, year, class, timestamp, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
-    `);
-
-    return insert.run(
-      pickupData.id,
-      pickupData.student_id,
-      pickupData.student_name,
-      pickupData.year,
-      pickupData.class,
-      pickupData.timestamp
+  async addPickup(pickupData) {
+    const result = await this.pool.query(
+      `INSERT INTO pickups (id, student_id, student_name, year, class, timestamp, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+       RETURNING *`,
+      [
+        pickupData.id,
+        pickupData.student_id,
+        pickupData.student_name,
+        pickupData.year,
+        pickupData.class,
+        pickupData.timestamp
+      ]
     );
+    return result.rows[0];
   }
 
   // Get all pending pickups
-  getPendingPickups() {
-    return this.db.prepare(
+  async getPendingPickups() {
+    const result = await this.pool.query(
       "SELECT * FROM pickups WHERE status = 'pending' ORDER BY timestamp"
-    ).all();
+    );
+    return result.rows;
   }
 
   // Get pending pickups for a specific class
-  getPendingPickupsByClass(year, className) {
-    return this.db.prepare(
-      "SELECT * FROM pickups WHERE status = 'pending' AND year = ? AND class = ? ORDER BY timestamp"
-    ).all(year, className);
+  async getPendingPickupsByClass(year, className) {
+    const result = await this.pool.query(
+      "SELECT * FROM pickups WHERE status = 'pending' AND year = $1 AND class = $2 ORDER BY timestamp",
+      [year, className]
+    );
+    return result.rows;
   }
 
   // Acknowledge a pickup (mark as sent)
-  acknowledgePickup(pickupId) {
-    const update = this.db.prepare(`
-      UPDATE pickups 
-      SET status = 'acknowledged', acknowledged_at = ?
-      WHERE id = ?
-    `);
-
-    return update.run(Date.now(), pickupId);
+  async acknowledgePickup(pickupId) {
+    const result = await this.pool.query(
+      `UPDATE pickups 
+       SET status = 'acknowledged', acknowledged_at = $1
+       WHERE id = $2
+       RETURNING *`,
+      [Date.now(), pickupId]
+    );
+    return result.rows[0];
   }
 
   // Get pickup history
-  getPickupHistory(limit = 100) {
-    return this.db.prepare(
-      'SELECT * FROM pickups ORDER BY timestamp DESC LIMIT ?'
-    ).all(limit);
+  async getPickupHistory(limit = 100) {
+    const result = await this.pool.query(
+      'SELECT * FROM pickups ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    );
+    return result.rows;
   }
 
   // Clear old acknowledged pickups (older than 24 hours)
-  clearOldPickups() {
+  async clearOldPickups() {
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const del = this.db.prepare(
-      "DELETE FROM pickups WHERE status = 'acknowledged' AND acknowledged_at < ?"
+    const result = await this.pool.query(
+      "DELETE FROM pickups WHERE status = 'acknowledged' AND acknowledged_at < $1",
+      [oneDayAgo]
     );
-    return del.run(oneDayAgo);
+    return result.rowCount;
   }
 
   // Add a new student
-  addStudent(name, year, className) {
-    const insert = this.db.prepare(
-      'INSERT INTO students (name, year, class) VALUES (?, ?, ?)'
+  async addStudent(name, year, className) {
+    const result = await this.pool.query(
+      'INSERT INTO students (name, year, class) VALUES ($1, $2, $3) RETURNING *',
+      [name, year, className]
     );
-    return insert.run(name, year, className);
+    return result.rows[0];
   }
 
   // Add multiple students in a batch
-  addStudentsBatch(students) {
-    const insert = this.db.prepare(
-      'INSERT INTO students (name, year, class) VALUES (?, ?, ?)'
-    );
+  async addStudentsBatch(students) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const insertMany = this.db.transaction((studentList) => {
-      for (const student of studentList) {
-        insert.run(student.name, student.year, student.class);
+      for (const student of students) {
+        await client.query(
+          'INSERT INTO students (name, year, class) VALUES ($1, $2, $3)',
+          [student.name, student.year, student.class]
+        );
       }
-    });
 
-    insertMany(students);
-    return students.length;
+      await client.query('COMMIT');
+      return students.length;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // Delete a student
-  deleteStudent(id) {
-    const del = this.db.prepare('DELETE FROM students WHERE id = ?');
-    return del.run(id);
+  async deleteStudent(id) {
+    const result = await this.pool.query('DELETE FROM students WHERE id = $1', [id]);
+    return result.rowCount;
   }
 
   // Update a student
-  updateStudent(id, name, year, className) {
-    const update = this.db.prepare(
-      'UPDATE students SET name = ?, year = ?, class = ? WHERE id = ?'
+  async updateStudent(id, name, year, className) {
+    const result = await this.pool.query(
+      'UPDATE students SET name = $1, year = $2, class = $3 WHERE id = $4 RETURNING *',
+      [name, year, className, id]
     );
-    return update.run(name, year, className, id);
+    return result.rows[0];
   }
 
-  close() {
-    this.db.close();
+  async close() {
+    await this.pool.end();
   }
 }
 
