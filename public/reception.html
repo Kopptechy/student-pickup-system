@@ -94,9 +94,20 @@
             text-transform: uppercase;
         }
 
-        .badge-blue { background-color: #dbeafe; color: #1e40af; }
-        .badge-green { background-color: #dcfce7; color: #166534; }
-        .badge-red { background-color: #fee2e2; color: #991b1b; }
+        .badge-blue {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-green {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-red {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
 
         .search-container {
             margin-bottom: var(--spacing-md);
@@ -208,12 +219,22 @@
         }
 
         @keyframes slideInRight {
-            from { opacity: 0; transform: translateX(100px); }
-            to { opacity: 1; transform: translateX(0); }
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         @keyframes fadeOut {
-            to { opacity: 0; transform: translateX(100px); }
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
         }
 
         .back-link {
@@ -229,13 +250,13 @@
         .back-link:hover {
             color: var(--primary);
         }
-        
+
         /* Spinner */
         .spinner {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
+            border: 3px solid rgba(255, 255, 255, .3);
             border-radius: 50%;
             border-top-color: #fff;
             animation: spin 1s ease-in-out infinite;
@@ -244,14 +265,16 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="reception-container">
-        <a href="index.html" class="back-link">← Back to Home</a>
+
 
         <div class="header">
             <h1>📝 Reception Sign-Out</h1>
@@ -275,7 +298,8 @@
                     </div>
 
                     <div class="flex justify-between items-center mb-sm">
-                        <label class="form-label mb-0">Select Students <span id="selectedCount" class="selection-count" style="display: none;">0</span></label>
+                        <label class="form-label mb-0">Select Students <span id="selectedCount" class="selection-count"
+                                style="display: none;">0</span></label>
                         <button type="button" class="btn btn-sm btn-secondary" id="selectAllBtn">Select All</button>
                     </div>
 
@@ -333,7 +357,7 @@
             const year = e.target.value;
             const selectionArea = document.getElementById('studentSelectionArea');
             const studentList = document.getElementById('studentList');
-            
+
             // Reset state
             selectedStudentIds.clear();
             updateSubmitButton();
@@ -376,7 +400,7 @@
         // Search filtering
         document.getElementById('studentSearch').addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
-            const filteredStudents = allStudentsInYear.filter(student => 
+            const filteredStudents = allStudentsInYear.filter(student =>
                 student.name.toLowerCase().includes(searchTerm)
             );
             renderStudentList(filteredStudents);
@@ -386,7 +410,7 @@
         document.getElementById('selectAllBtn').addEventListener('click', () => {
             const checkboxes = document.querySelectorAll('.student-checkbox');
             const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-            
+
             checkboxes.forEach(cb => {
                 cb.checked = !allChecked;
                 const studentId = parseInt(cb.value);
@@ -403,7 +427,7 @@
 
         function renderStudentList(students) {
             const listContainer = document.getElementById('studentList');
-            
+
             if (students.length === 0) {
                 listContainer.innerHTML = '<div class="empty-state"><p>No students found</p></div>';
                 return;
@@ -412,7 +436,7 @@
             listContainer.innerHTML = students.map(student => {
                 const isSelected = selectedStudentIds.has(student.id);
                 const badgeClass = `badge-${student.class.toLowerCase()}`;
-                
+
                 return `
                     <label class="student-list-item ${isSelected ? 'selected' : ''}">
                         <input type="checkbox" class="student-checkbox" value="${student.id}" ${isSelected ? 'checked' : ''}>
@@ -429,7 +453,7 @@
             const btn = document.getElementById('submitBtn');
             const countSpan = document.getElementById('selectedCount');
             const count = selectedStudentIds.size;
-            
+
             btn.disabled = count === 0;
             if (count > 0) {
                 btn.textContent = `Sign Out ${count} Student${count !== 1 ? 's' : ''}`;
@@ -478,13 +502,13 @@
             }
 
             showSuccessMessage(`Successfully signed out ${successCount} student${successCount !== 1 ? 's' : ''}!`);
-            
+
             // Reset
             selectedStudentIds.clear();
             renderStudentList(allStudentsInYear); // Refresh UI choices
             document.getElementById('studentSearch').value = '';
             updateSubmitButton();
-            
+
             submitBtn.disabled = true;
             submitBtn.textContent = 'Sign Out Selected Students';
 
