@@ -29,6 +29,101 @@
             margin-bottom: var(--spacing-md);
         }
 
+        .student-list-container {
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            height: 400px;
+            overflow-y: auto;
+            background: var(--bg-background);
+            margin-bottom: var(--spacing-lg);
+            position: relative;
+        }
+
+        .student-list-item {
+            display: flex;
+            align-items: center;
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .student-list-item:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .student-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .student-list-item.selected {
+            background-color: rgba(37, 99, 235, 0.1);
+        }
+
+        .student-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-right: var(--spacing-md);
+            accent-color: var(--primary);
+        }
+
+        .student-info {
+            flex: 1;
+        }
+
+        .student-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: block;
+        }
+
+        .student-class {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .class-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+
+        .badge-blue { background-color: #dbeafe; color: #1e40af; }
+        .badge-green { background-color: #dcfce7; color: #166534; }
+        .badge-red { background-color: #fee2e2; color: #991b1b; }
+
+        .search-container {
+            margin-bottom: var(--spacing-md);
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        #studentSearch {
+            padding-left: 40px;
+        }
+
+        .selection-count {
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+
         .queue-section {
             margin-top: var(--spacing-xl);
         }
@@ -113,22 +208,12 @@
         }
 
         @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(100px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+            from { opacity: 0; transform: translateX(100px); }
+            to { opacity: 1; transform: translateX(0); }
         }
 
         @keyframes fadeOut {
-            to {
-                opacity: 0;
-                transform: translateX(100px);
-            }
+            to { opacity: 0; transform: translateX(100px); }
         }
 
         .back-link {
@@ -144,6 +229,23 @@
         .back-link:hover {
             color: var(--primary);
         }
+        
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 
@@ -156,35 +258,35 @@
         </div>
 
         <div class="sign-out-form">
-            <h2 class="mb-md">Sign Out Student</h2>
+            <h2 class="mb-md">Sign Out Students</h2>
 
             <form id="signOutForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="yearSelect">Year</label>
-                        <select id="yearSelect" class="form-control form-control-lg" required>
-                            <option value="">Select Year</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="classSelect">Class</label>
-                        <select id="classSelect" class="form-control form-control-lg" required disabled>
-                            <option value="">Select Class</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="studentSelect">Student Name</label>
-                    <select id="studentSelect" class="form-control form-control-lg" required disabled>
-                        <option value="">Select Student</option>
+                <div class="form-group mb-md">
+                    <label class="form-label" for="yearSelect">Select Year Group</label>
+                    <select id="yearSelect" class="form-control form-control-lg" required>
+                        <option value="">Select Year...</option>
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-success btn-xl w-full" id="submitBtn">
-                    Sign Out Student
-                </button>
+                <div id="studentSelectionArea" style="display: none;">
+                    <div class="search-container">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="studentSearch" class="form-control" placeholder="Search student name...">
+                    </div>
+
+                    <div class="flex justify-between items-center mb-sm">
+                        <label class="form-label mb-0">Select Students <span id="selectedCount" class="selection-count" style="display: none;">0</span></label>
+                        <button type="button" class="btn btn-sm btn-secondary" id="selectAllBtn">Select All</button>
+                    </div>
+
+                    <div class="student-list-container" id="studentList">
+                        <!-- Students will be populated here -->
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-xl w-full" id="submitBtn" disabled>
+                        Sign Out Selected Students
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -204,7 +306,8 @@
     </div>
 
     <script>
-        let students = [];
+        let allStudentsInYear = [];
+        let selectedStudentIds = new Set();
         let pendingPickups = [];
 
         // Load years on page load
@@ -225,114 +328,168 @@
             }
         }
 
-        // Load classes when year is selected
+        // Load students when year is selected
         document.getElementById('yearSelect').addEventListener('change', async (e) => {
             const year = e.target.value;
-            const classSelect = document.getElementById('classSelect');
-            const studentSelect = document.getElementById('studentSelect');
-
-            classSelect.innerHTML = '<option value="">Select Class</option>';
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-            studentSelect.disabled = true;
+            const selectionArea = document.getElementById('studentSelectionArea');
+            const studentList = document.getElementById('studentList');
+            
+            // Reset state
+            selectedStudentIds.clear();
+            updateSubmitButton();
+            document.getElementById('studentSearch').value = '';
 
             if (!year) {
-                classSelect.disabled = true;
+                selectionArea.style.display = 'none';
                 return;
             }
 
-            try {
-                const response = await fetch(`/api/classes/${year}`);
-                const classes = await response.json();
-
-                classes.forEach(({ class: className }) => {
-                    const option = document.createElement('option');
-                    option.value = className;
-                    option.textContent = className.charAt(0).toUpperCase() + className.slice(1);
-                    classSelect.appendChild(option);
-                });
-
-                classSelect.disabled = false;
-            } catch (error) {
-                console.error('Error loading classes:', error);
-            }
-        });
-
-        // Load students when class is selected
-        document.getElementById('classSelect').addEventListener('change', async (e) => {
-            const className = e.target.value;
-            const year = document.getElementById('yearSelect').value;
-            const studentSelect = document.getElementById('studentSelect');
-
-            studentSelect.innerHTML = '<option value="">Select Student</option>';
-
-            if (!className) {
-                studentSelect.disabled = true;
-                return;
-            }
+            // Show loading state
+            selectionArea.style.display = 'block';
+            studentList.innerHTML = '<div class="empty-state"><p>Loading students...</p></div>';
 
             try {
-                const response = await fetch(`/api/students/${year}/${className}`);
-                students = await response.json();
-
-                students.forEach((student) => {
-                    const option = document.createElement('option');
-                    option.value = student.id;
-                    option.textContent = student.name;
-                    option.dataset.studentName = student.name;
-                    option.dataset.year = student.year;
-                    option.dataset.class = student.class;
-                    studentSelect.appendChild(option);
-                });
-
-                studentSelect.disabled = false;
+                const response = await fetch(`/api/students/year/${year}`);
+                allStudentsInYear = await response.json();
+                renderStudentList(allStudentsInYear);
             } catch (error) {
                 console.error('Error loading students:', error);
+                studentList.innerHTML = '<div class="empty-state"><p class="text-danger">Error loading students</p></div>';
             }
         });
+
+        // Use event delegation for student selection (better performance)
+        document.getElementById('studentList').addEventListener('change', (e) => {
+            if (e.target.classList.contains('student-checkbox')) {
+                const studentId = parseInt(e.target.value);
+                if (e.target.checked) {
+                    selectedStudentIds.add(studentId);
+                    e.target.closest('.student-list-item').classList.add('selected');
+                } else {
+                    selectedStudentIds.delete(studentId);
+                    e.target.closest('.student-list-item').classList.remove('selected');
+                }
+                updateSubmitButton();
+            }
+        });
+
+        // Search filtering
+        document.getElementById('studentSearch').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredStudents = allStudentsInYear.filter(student => 
+                student.name.toLowerCase().includes(searchTerm)
+            );
+            renderStudentList(filteredStudents);
+        });
+
+        // Select All / Deselect All
+        document.getElementById('selectAllBtn').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('.student-checkbox');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            
+            checkboxes.forEach(cb => {
+                cb.checked = !allChecked;
+                const studentId = parseInt(cb.value);
+                if (!allChecked) {
+                    selectedStudentIds.add(studentId);
+                    cb.closest('.student-list-item').classList.add('selected');
+                } else {
+                    selectedStudentIds.delete(studentId);
+                    cb.closest('.student-list-item').classList.remove('selected');
+                }
+            });
+            updateSubmitButton();
+        });
+
+        function renderStudentList(students) {
+            const listContainer = document.getElementById('studentList');
+            
+            if (students.length === 0) {
+                listContainer.innerHTML = '<div class="empty-state"><p>No students found</p></div>';
+                return;
+            }
+
+            listContainer.innerHTML = students.map(student => {
+                const isSelected = selectedStudentIds.has(student.id);
+                const badgeClass = `badge-${student.class.toLowerCase()}`;
+                
+                return `
+                    <label class="student-list-item ${isSelected ? 'selected' : ''}">
+                        <input type="checkbox" class="student-checkbox" value="${student.id}" ${isSelected ? 'checked' : ''}>
+                        <div class="student-info">
+                            <span class="student-name">${student.name}</span>
+                            <span class="class-badge ${badgeClass}">${student.class}</span>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+        }
+
+        function updateSubmitButton() {
+            const btn = document.getElementById('submitBtn');
+            const countSpan = document.getElementById('selectedCount');
+            const count = selectedStudentIds.size;
+            
+            btn.disabled = count === 0;
+            if (count > 0) {
+                btn.textContent = `Sign Out ${count} Student${count !== 1 ? 's' : ''}`;
+                countSpan.textContent = count;
+                countSpan.style.display = 'inline-block';
+            } else {
+                btn.textContent = 'Sign Out Selected Students';
+                countSpan.style.display = 'none';
+            }
+        }
 
         // Handle form submission
         document.getElementById('signOutForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const studentSelect = document.getElementById('studentSelect');
-            const selectedOption = studentSelect.options[studentSelect.selectedIndex];
-
-            const pickupData = {
-                student_id: parseInt(selectedOption.value),
-                student_name: selectedOption.dataset.studentName,
-                year: parseInt(selectedOption.dataset.year),
-                class: selectedOption.dataset.class
-            };
+            if (selectedStudentIds.size === 0) return;
 
             const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> Signing Out...';
+            submitBtn.innerHTML = '<span class="spinner"></span> Processing...';
 
-            try {
-                const response = await fetch('/api/pickups', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pickupData)
-                });
+            let successCount = 0;
+            const studentsToSignOut = allStudentsInYear.filter(s => selectedStudentIds.has(s.id));
 
-                if (response.ok) {
-                    showSuccessMessage(`${pickupData.student_name} signed out successfully!`);
+            // Process sequentially to ensure order
+            for (const student of studentsToSignOut) {
+                const pickupData = {
+                    student_id: student.id,
+                    student_name: student.name,
+                    year: student.year,
+                    class: student.class // This ensures routing to correct display!
+                };
 
-                    // Reset form
-                    document.getElementById('signOutForm').reset();
-                    document.getElementById('classSelect').disabled = true;
-                    document.getElementById('studentSelect').disabled = true;
+                try {
+                    const response = await fetch('/api/pickups', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(pickupData)
+                    });
 
-                    // Reload queue
-                    loadPendingPickups();
+                    if (response.ok) successCount++;
+                } catch (error) {
+                    console.error(`Error signing out ${student.name}:`, error);
                 }
-            } catch (error) {
-                console.error('Error signing out student:', error);
-                alert('Error signing out student. Please try again.');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Sign Out Student';
             }
+
+            showSuccessMessage(`Successfully signed out ${successCount} student${successCount !== 1 ? 's' : ''}!`);
+            
+            // Reset
+            selectedStudentIds.clear();
+            renderStudentList(allStudentsInYear); // Refresh UI choices
+            document.getElementById('studentSearch').value = '';
+            updateSubmitButton();
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sign Out Selected Students';
+
+            // Reload queue
+            loadPendingPickups();
         });
 
         // Show success message
@@ -352,7 +509,6 @@
             try {
                 const response = await fetch('/api/pickups/pending');
                 pendingPickups = await response.json();
-
                 renderQueue();
             } catch (error) {
                 console.error('Error loading pending pickups:', error);
