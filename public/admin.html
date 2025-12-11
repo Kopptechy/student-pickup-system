@@ -894,37 +894,9 @@ Sophia Davis
         document.getElementById('filterYear').addEventListener('change', filterStudents);
         document.getElementById('filterClass').addEventListener('change', filterStudents);
 
-        // Update year dropdown to show/hide green class
-        document.getElementById('studentYear').addEventListener('change', (e) => {
-            const year = parseInt(e.target.value);
-            const classSelect = document.getElementById('studentClass');
-            const greenOption = classSelect.querySelector('option[value="green"]');
 
-            if (year === 12) {
-                greenOption.style.display = 'none';
-                if (classSelect.value === 'green') {
-                    classSelect.value = '';
-                }
-            } else {
-                greenOption.style.display = 'block';
-            }
-        });
 
-        // Update batch year dropdown to show/hide green class
-        document.getElementById('batchYear').addEventListener('change', (e) => {
-            const year = parseInt(e.target.value);
-            const classSelect = document.getElementById('batchClass');
-            const greenOption = classSelect.querySelector('option[value="green"]');
 
-            if (year === 12) {
-                greenOption.style.display = 'none';
-                if (classSelect.value === 'green') {
-                    classSelect.value = '';
-                }
-            } else {
-                greenOption.style.display = 'block';
-            }
-        });
 
         // Close modal on outside click
         document.getElementById('studentModal').addEventListener('click', (e) => {
