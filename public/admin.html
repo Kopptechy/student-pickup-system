@@ -798,13 +798,16 @@ Sophia Davis
             });
 
             tbody.innerHTML = history.map(pickup => {
-                const signedOut = timeFormatter.format(new Date(pickup.timestamp));
-                const acknowledged = pickup.acknowledged_at
-                    ? timeFormatter.format(new Date(pickup.acknowledged_at))
+                const timestamp = parseInt(pickup.timestamp);
+                const ackTimestamp = pickup.acknowledged_at ? parseInt(pickup.acknowledged_at) : null;
+
+                const signedOut = timeFormatter.format(new Date(timestamp));
+                const acknowledged = ackTimestamp
+                    ? timeFormatter.format(new Date(ackTimestamp))
                     : 'N/A';
 
-                const waitTime = pickup.acknowledged_at
-                    ? Math.floor((pickup.acknowledged_at - pickup.timestamp) / 1000 / 60) + ' mins'
+                const waitTime = ackTimestamp
+                    ? Math.floor((ackTimestamp - timestamp) / 1000 / 60) + ' mins'
                     : 'N/A';
 
                 return `
@@ -839,13 +842,16 @@ Sophia Davis
 
             // CSV Rows
             const rows = history.map(p => {
-                const signedOut = timeFormatter.format(new Date(p.timestamp)).replace(',', '');
-                const acknowledged = p.acknowledged_at
-                    ? timeFormatter.format(new Date(p.acknowledged_at)).replace(',', '')
+                const timestamp = parseInt(p.timestamp);
+                const ackTimestamp = p.acknowledged_at ? parseInt(p.acknowledged_at) : null;
+
+                const signedOut = timeFormatter.format(new Date(timestamp)).replace(',', '');
+                const acknowledged = ackTimestamp
+                    ? timeFormatter.format(new Date(ackTimestamp)).replace(',', '')
                     : 'N/A';
 
-                const waitTime = p.acknowledged_at
-                    ? Math.floor((p.acknowledged_at - p.timestamp) / 1000 / 60)
+                const waitTime = ackTimestamp
+                    ? Math.floor((ackTimestamp - timestamp) / 1000 / 60)
                     : '';
 
                 return [
