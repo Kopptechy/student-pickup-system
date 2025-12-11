@@ -749,9 +749,14 @@ Sophia Davis
 
             try {
                 // Delete each student
-                const deletePromises = selectedIds.map(id =>
-                    fetch(`/api/students/${id}`, { method: 'DELETE' })
-                );
+                const deletePromises = selectedIds.map(async id => {
+                    const response = await fetch(`/api/students/${id}`, { method: 'DELETE' });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `Failed to delete student ${id}`);
+                    }
+                    return response;
+                });
 
                 await Promise.all(deletePromises);
 
