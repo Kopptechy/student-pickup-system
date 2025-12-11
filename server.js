@@ -98,6 +98,17 @@ app.get('/api/students', async (req, res) => {
     }
 });
 
+// Get all students in a year
+app.get('/api/students/year/:year', async (req, res) => {
+    try {
+        const { year } = req.params;
+        const students = await db.getStudentsByYear(parseInt(year));
+        res.json(students);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get students by class
 app.get('/api/students/:year/:class', async (req, res) => {
     try {
@@ -130,16 +141,7 @@ app.get('/api/classes/:year', async (req, res) => {
     }
 });
 
-// Get all students in a year
-app.get('/api/students/year/:year', async (req, res) => {
-    try {
-        const { year } = req.params;
-        const students = await db.getStudentsByYear(parseInt(year));
-        res.json(students);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+
 
 // Create a new pickup
 app.post('/api/pickups', async (req, res) => {
