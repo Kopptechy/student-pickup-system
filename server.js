@@ -297,6 +297,8 @@ app.put('/api/students/:id', async (req, res) => {
 app.delete('/api/students/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        // Workaround: Delete pickups first to avoid foreign key constraint
+        await db.pool.query('DELETE FROM pickups WHERE student_id = $1', [id]);
         await db.deleteStudent(id);
         res.json({ success: true });
     } catch (error) {
