@@ -142,6 +142,15 @@ class PickupDatabase {
     return result.rows;
   }
 
+  // Get all students in a year (regardless of class)
+  async getStudentsByYear(year) {
+    const result = await this.pool.query(
+      'SELECT * FROM students WHERE year = $1 ORDER BY class, name',
+      [year]
+    );
+    return result.rows;
+  }
+
   // Get classes for a specific year
   async getClassesByYear(year) {
     const result = await this.pool.query(
