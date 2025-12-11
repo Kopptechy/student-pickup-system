@@ -764,7 +764,7 @@ Sophia Davis
                 loadStudents();
             } catch (error) {
                 console.error('Error deleting selected students:', error);
-                alert('Error deleting students. Please try again.');
+                alert(`Error: ${error.message}`);
             }
         }
 
