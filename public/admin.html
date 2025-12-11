@@ -776,6 +776,8 @@ Sophia Davis
                 renderHistory();
             } catch (error) {
                 console.error('Error loading history:', error);
+                document.getElementById('historyTableBody').innerHTML =
+                    `<tr><td colspan="6" class="error-message">Error loading history: ${error.message}</td></tr>`;
             }
         }
 
