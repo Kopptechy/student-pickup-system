@@ -412,14 +412,15 @@
 
             <div class="merge-form" id="mergeForm">
                 <div class="form-group">
-                    <label class="form-label" for="mergeYearSelect">Year</label>
+                    <label class="form-label" for="mergeYearSelect">Select Year Group</label>
                     <select id="mergeYearSelect" class="form-control">
                         <option value="">Select Year...</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="sourceClassSelect">Source Class</label>
+                    <label class="form-label" for="sourceClassSelect">Source Class <span id="sourceYearLabel"
+                            style="color: var(--primary);"></span></label>
                     <select id="sourceClassSelect" class="form-control" disabled>
                         <option value="">Select...</option>
                     </select>
@@ -429,7 +430,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="hostClassSelect">Host Class</label>
+                    <label class="form-label" for="hostClassSelect">Host Class <span id="hostYearLabel"
+                            style="color: var(--primary);"></span></label>
                     <select id="hostClassSelect" class="form-control" disabled>
                         <option value="">Select...</option>
                     </select>
@@ -773,6 +775,10 @@
             const sourceSelect = document.getElementById('sourceClassSelect');
             const hostSelect = document.getElementById('hostClassSelect');
 
+            // Update year labels
+            document.getElementById('sourceYearLabel').textContent = year ? `(Year ${year})` : '';
+            document.getElementById('hostYearLabel').textContent = year ? `(Year ${year})` : '';
+
             // Reset
             sourceSelect.innerHTML = '<option value="">Select...</option>';
             hostSelect.innerHTML = '<option value="">Select...</option>';
@@ -797,7 +803,7 @@
                         const sourceOpt = document.createElement('option');
                         sourceOpt.value = className;
                         sourceOpt.textContent = capitalize(className);
-                        // Disable if it's a host
+                        // Disable if it's a host (already hosting another class)
                         if (usedHosts.includes(className)) {
                             sourceOpt.disabled = true;
                             sourceOpt.textContent += ' (hosting)';
@@ -805,11 +811,15 @@
                         sourceSelect.appendChild(sourceOpt);
                     }
 
-                    // Add to host if not already used as source elsewhere
+                    // Add to host dropdown - show all classes except those already merged as source
                     if (!usedSources.includes(className)) {
                         const hostOpt = document.createElement('option');
                         hostOpt.value = className;
                         hostOpt.textContent = capitalize(className);
+                        // Mark if already hosting (can still be selected, just informational)
+                        if (usedHosts.includes(className)) {
+                            hostOpt.textContent += ' (already hosting)';
+                        }
                         hostSelect.appendChild(hostOpt);
                     }
                 });
