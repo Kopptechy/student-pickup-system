@@ -769,11 +769,11 @@
             container.innerHTML = activeMerges.map(merge => `
                 <div class="merge-item">
                     <div class="merge-item-text">
-                        <span>Year ${merge.year} ${capitalize(merge.source_class)}</span>
+                        <span>Year ${merge.source_year} ${capitalize(merge.source_class)}</span>
                         <span class="merge-arrow">→</span>
-                        <span>Year ${merge.year} ${capitalize(merge.host_class)}</span>
+                        <span>Year ${merge.host_year} ${capitalize(merge.host_class)}</span>
                     </div>
-                    <button class="unmerge-btn" onclick="unmergeClass(${merge.year}, '${merge.source_class}')">
+                    <button class="unmerge-btn" onclick="unmergeClass(${merge.source_year}, '${merge.source_class}')">
                         ✕ Un-merge
                     </button>
                 </div>
