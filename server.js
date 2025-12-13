@@ -49,7 +49,8 @@ wss.on('connection', (ws, req) => {
                 ws.send(JSON.stringify({
                     type: 'initial',
                     pickups: pendingPickups,
-                    mergedClasses: sourceClasses
+                    mergedClasses: sourceClasses,
+                    serverTime: Date.now() // For time synchronization
                 }));
             }
         } catch (error) {
@@ -92,16 +93,17 @@ function broadcastToClass(year, className, data) {
 }
 
 // Broadcast pickup to class AND any host class it's merged into
+// Broadcast pickup to class AND any host class it's merged into
 async function broadcastToClassWithMerge(year, className, data) {
     // First broadcast to the original class
     broadcastToClass(year, className, data);
 
     // Check if this class is merged into a host class
-    const hostClass = await db.getHostClass(year, className);
-    if (hostClass) {
+    const hostInfo = await db.getHostClass(year, className);
+    if (hostInfo) {
         // Also broadcast to the host class display
-        broadcastToClass(year, hostClass, data);
-        console.log(`Also broadcasted to host class: year${year}-${hostClass}`);
+        broadcastToClass(hostInfo.host_year, hostInfo.host_class, data);
+        console.log(`Also broadcasted to host class: year${hostInfo.host_year}-${hostInfo.host_class}`);
     }
 }
 
@@ -366,7 +368,7 @@ app.get('/api/merges', async (req, res) => {
     }
 });
 
-// Get merges for a specific year
+// Get merges where source is in a specific year (for UI filtering)
 app.get('/api/merges/:year', async (req, res) => {
     try {
         const { year } = req.params;
@@ -380,43 +382,61 @@ app.get('/api/merges/:year', async (req, res) => {
 // Create a new merge
 app.post('/api/merges', async (req, res) => {
     try {
-        const { year, sourceClass, hostClass } = req.body;
+        const { sourceYear, sourceClass, hostYear, hostClass } = req.body;
 
-        // Validation: same year, different classes
-        if (sourceClass === hostClass) {
+        // Validation: cannot merge same class to itself
+        if (sourceYear === hostYear && sourceClass === hostClass) {
             return res.status(400).json({ error: 'Source and host class cannot be the same' });
         }
 
         // Check if source is already merged
-        const existingSource = await db.isSourceClass(year, sourceClass);
+        const existingSource = await db.isSourceClass(sourceYear, sourceClass);
         if (existingSource) {
-            return res.status(400).json({ error: `${sourceClass} is already merged to another class` });
+            return res.status(400).json({ error: `${sourceClass} (Year ${sourceYear}) is already merged` });
         }
 
         // Check if source is being used as a host
-        const sourceIsHost = await db.isHostClass(year, sourceClass);
+        const sourceIsHost = await db.isHostClass(sourceYear, sourceClass);
         if (sourceIsHost) {
-            return res.status(400).json({ error: `${sourceClass} is currently hosting another class and cannot be merged` });
+            return res.status(400).json({ error: `${sourceClass} (Year ${sourceYear}) is hosting and cannot be merged` });
         }
 
-        // Check if host is already a source (merged elsewhere)
-        const hostIsSource = await db.isSourceClass(year, hostClass);
+        // Check if host is merged elsewhere (optional, but prevents chains/loops)
+        const hostIsSource = await db.isSourceClass(hostYear, hostClass);
         if (hostIsSource) {
-            return res.status(400).json({ error: `${hostClass} is merged elsewhere and cannot be a host` });
+            return res.status(400).json({ error: `Host class ${hostClass} (Year ${hostYear}) is already merged elsewhere` });
         }
 
-        const merge = await db.createMerge(year, sourceClass, hostClass);
+        const merge = await db.createMerge(sourceYear, sourceClass, hostYear, hostClass);
 
-        // Notify the host display about the merge
-        const sourceClasses = await db.getSourceClasses(year, hostClass);
-        broadcastMergeUpdate(year, hostClass, sourceClasses);
+        // Notify the host display
+        // We need to fetch any existing pending pickups from the source class to show on the host
+        const sourcePickups = await db.getPendingPickupsByClass(sourceYear, sourceClass);
 
-        // Also send current pickups from source class to host display
-        const sourcePickups = await db.getPendingPickupsByClass(year, sourceClass);
-        for (const pickup of sourcePickups) {
-            broadcastToClass(year, hostClass, {
-                type: 'new_pickup',
-                pickup: pickup
+        // Notify host about the new merge and send current pickups
+        const hostClassKey = `year${hostYear}-${hostClass}`;
+        const connections = classConnections.get(hostClassKey);
+
+        if (connections) {
+            // Send update to refresh header
+            const allSources = await db.getSourceClasses(hostYear, hostClass);
+            const updateMsg = JSON.stringify({
+                type: 'merge_update',
+                mergedClasses: allSources
+            });
+
+            connections.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(updateMsg);
+
+                    // Also send the existing pickups from the source class
+                    sourcePickups.forEach(pickup => {
+                        client.send(JSON.stringify({
+                            type: 'new_pickup',
+                            pickup: pickup
+                        }));
+                    });
+                }
             });
         }
 
@@ -427,23 +447,20 @@ app.post('/api/merges', async (req, res) => {
 });
 
 // Delete a merge (un-merge)
-app.delete('/api/merges/:year/:sourceClass', async (req, res) => {
+app.delete('/api/merges/:sourceYear/:sourceClass', async (req, res) => {
     try {
-        const { year, sourceClass } = req.params;
+        const { sourceYear, sourceClass } = req.params;
 
-        // Get the host before deleting
-        const hostClass = await db.getHostClass(parseInt(year), sourceClass);
+        // Get the host before deleting so we can notify them
+        const hostInfo = await db.getHostClass(parseInt(sourceYear), sourceClass);
 
-        const deleted = await db.deleteMerge(parseInt(year), sourceClass);
-
-        if (!deleted) {
-            return res.status(404).json({ error: 'Merge not found' });
-        }
+        const deleted = await db.deleteMerge(parseInt(sourceYear), sourceClass);
 
         // Notify the host display that merge is removed
-        if (hostClass) {
-            const remainingSourceClasses = await db.getSourceClasses(parseInt(year), hostClass);
-            broadcastMergeUpdate(parseInt(year), hostClass, remainingSourceClasses);
+        if (hostInfo) {
+            const { host_year, host_class } = hostInfo;
+            const remainingSourceClasses = await db.getSourceClasses(host_year, host_class);
+            broadcastMergeUpdate(host_year, host_class, remainingSourceClasses);
         }
 
         res.json({ success: true });
