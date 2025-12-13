@@ -46,6 +46,23 @@ class PickupDatabase {
         CREATE INDEX IF NOT EXISTS idx_students_class ON students(year, class);
       `);
 
+      // Class merges table - for temporary class combinations
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS class_merges (
+          id SERIAL PRIMARY KEY,
+          year INTEGER NOT NULL,
+          source_class TEXT NOT NULL,
+          host_class TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          UNIQUE(year, source_class)
+        )
+      `);
+
+      // Create index for class merges
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_merges_year ON class_merges(year);
+      `);
+
       // Mock data seeding disabled - add real students via admin interface
       console.log('Database ready. Add students through the admin interface.');
     } finally {
@@ -260,6 +277,10 @@ class PickupDatabase {
 
   // Delete a student
   async deleteStudent(id) {
+    // First delete any pickups associated with this student
+    await this.pool.query('DELETE FROM pickups WHERE student_id = $1', [id]);
+
+    // Then delete the student
     const result = await this.pool.query('DELETE FROM students WHERE id = $1', [id]);
     return result.rowCount;
   }
@@ -281,6 +302,104 @@ class PickupDatabase {
 
   async close() {
     await this.pool.end();
+  }
+
+  // ==================== CLASS MERGE METHODS ====================
+
+  // Create a new merge (source class → host class)
+  async createMerge(year, sourceClass, hostClass) {
+    const result = await this.pool.query(
+      `INSERT INTO class_merges (year, source_class, host_class, created_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [year, sourceClass, hostClass, Date.now()]
+    );
+    return result.rows[0];
+  }
+
+  // Delete a merge
+  async deleteMerge(year, sourceClass) {
+    const result = await this.pool.query(
+      'DELETE FROM class_merges WHERE year = $1 AND source_class = $2 RETURNING *',
+      [year, sourceClass]
+    );
+    return result.rows[0];
+  }
+
+  // Get all active merges
+  async getActiveMerges() {
+    const result = await this.pool.query(
+      'SELECT * FROM class_merges ORDER BY year, source_class'
+    );
+    return result.rows;
+  }
+
+  // Get merges for a specific year
+  async getMergesForYear(year) {
+    const result = await this.pool.query(
+      'SELECT * FROM class_merges WHERE year = $1 ORDER BY source_class',
+      [year]
+    );
+    return result.rows;
+  }
+
+  // Check if a class is merged as source, return host class if so
+  async getHostClass(year, className) {
+    const result = await this.pool.query(
+      'SELECT host_class FROM class_merges WHERE year = $1 AND source_class = $2',
+      [year, className]
+    );
+    return result.rows[0]?.host_class || null;
+  }
+
+  // Get all source classes merged into a host
+  async getSourceClasses(year, hostClass) {
+    const result = await this.pool.query(
+      'SELECT source_class FROM class_merges WHERE year = $1 AND host_class = $2',
+      [year, hostClass]
+    );
+    return result.rows.map(row => row.source_class);
+  }
+
+  // Check if a class is being used as a host
+  async isHostClass(year, className) {
+    const result = await this.pool.query(
+      'SELECT COUNT(*) FROM class_merges WHERE year = $1 AND host_class = $2',
+      [year, className]
+    );
+    return parseInt(result.rows[0].count) > 0;
+  }
+
+  // Check if a class is already a source (merged elsewhere)
+  async isSourceClass(year, className) {
+    const result = await this.pool.query(
+      'SELECT COUNT(*) FROM class_merges WHERE year = $1 AND source_class = $2',
+      [year, className]
+    );
+    return parseInt(result.rows[0].count) > 0;
+  }
+
+  // Clear all merges (for end-of-day reset)
+  async clearAllMerges() {
+    const result = await this.pool.query('DELETE FROM class_merges');
+    return result.rowCount;
+  }
+
+  // Get pending pickups for a class INCLUDING merged source classes
+  async getPendingPickupsForDisplay(year, className) {
+    // Get source classes merged into this host
+    const sourceClasses = await this.getSourceClasses(year, className);
+
+    // Include both the host class and any source classes
+    const allClasses = [className, ...sourceClasses];
+
+    const result = await this.pool.query(
+      `SELECT * FROM pickups 
+       WHERE status = 'pending' AND year = $1 AND class = ANY($2)
+       ORDER BY timestamp`,
+      [year, allClasses]
+    );
+    return result.rows;
   }
 }
 
