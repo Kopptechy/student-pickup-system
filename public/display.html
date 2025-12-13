@@ -272,17 +272,26 @@
         let reconnectTimeout = null;
         let mergedClasses = []; // Classes merged into this display
 
+        let serverTimeOffset = 0;
+
         // Update class info header
         function updateClassInfo() {
             const classInfoEl = document.getElementById('classInfo');
-            const baseText = `Year ${year} ${className.charAt(0).toUpperCase() + className.slice(1)}`;
+            const baseText = `Year ${year} ${capitalize(className)}`;
 
             if (mergedClasses.length > 0) {
-                const mergedText = mergedClasses.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' + ');
+                // mergedClasses contains objects: { source_year, source_class }
+                const mergedText = mergedClasses.map(c => {
+                    return `Year ${c.source_year} ${capitalize(c.source_class)}`;
+                }).join(' + ');
                 classInfoEl.textContent = `${baseText} + ${mergedText} (merged)`;
             } else {
                 classInfoEl.textContent = baseText;
             }
+        }
+
+        function capitalize(str) {
+            return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
         }
 
         // Initial header
@@ -312,12 +321,19 @@
                     case 'initial':
                         pickups = data.pickups;
                         mergedClasses = data.mergedClasses || [];
+
+                        // Sync time if provided
+                        if (data.serverTime) {
+                            serverTimeOffset = Date.now() - data.serverTime;
+                            console.log('Time synchronized. Offset:', serverTimeOffset);
+                        }
+
                         updateClassInfo();
                         renderPickups();
                         break;
 
                     case 'new_pickup':
-                        // Avoid duplicates (can happen with merged classes)
+                        // Avoid duplicates
                         if (!pickups.find(p => p.id === data.pickup.id)) {
                             pickups.push(data.pickup);
                             renderPickups();
@@ -336,7 +352,6 @@
                         break;
 
                     case 'heartbeat':
-                        // Keep connection alive
                         break;
                 }
             };
@@ -344,8 +359,6 @@
             ws.onclose = () => {
                 console.log('WebSocket disconnected');
                 updateConnectionStatus(false);
-
-                // Attempt to reconnect after 3 seconds
                 reconnectTimeout = setTimeout(connectWebSocket, 3000);
             };
 
@@ -391,7 +404,11 @@
             }
 
             container.innerHTML = pickups.map(pickup => {
-                const waitTime = Math.floor((Date.now() - pickup.timestamp) / 1000 / 60);
+                // Apply time offset for accurate "minutes ago"
+                const now = Date.now() - serverTimeOffset;
+                const msAgo = now - pickup.timestamp;
+                const waitTime = Math.floor(msAgo / 1000 / 60);
+
                 let statusClass = 'new';
                 let statusText = `${waitTime} min${waitTime !== 1 ? 's' : ''}`;
 
