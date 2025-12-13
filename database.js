@@ -7,8 +7,6 @@ class PickupDatabase {
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
     });
-
-    this.initializeTables();
   }
 
   async initializeTables() {
@@ -47,26 +45,44 @@ class PickupDatabase {
       `);
 
       // Class merges table - for temporary class combinations
-      // Dropping table first to ensure schema update since this is a breaking change
-      await client.query('DROP TABLE IF EXISTS class_merges');
-
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS class_merges (
-          id SERIAL PRIMARY KEY,
-          source_year INTEGER NOT NULL,
-          source_class TEXT NOT NULL,
-          host_year INTEGER NOT NULL,
-          host_class TEXT NOT NULL,
-          created_at BIGINT NOT NULL,
-          UNIQUE(source_year, source_class)
-        )
+      // Check if table exists with the new schema (source_year column)
+      const tableCheck = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'class_merges' AND column_name = 'source_year'
       `);
 
-      // Create index for class merges
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_merges_source_year ON class_merges(source_year);
-        CREATE INDEX IF NOT EXISTS idx_merges_host_year ON class_merges(host_year);
-      `);
+      // Only drop and recreate if the new schema is NOT present
+      if (tableCheck.rowCount === 0) {
+        console.log('Updating class_merges schema...');
+        await client.query('BEGIN');
+        try {
+          await client.query('DROP TABLE IF EXISTS class_merges CASCADE');
+
+          await client.query(`
+            CREATE TABLE class_merges (
+              id SERIAL PRIMARY KEY,
+              source_year INTEGER NOT NULL,
+              source_class TEXT NOT NULL,
+              host_year INTEGER NOT NULL,
+              host_class TEXT NOT NULL,
+              created_at BIGINT NOT NULL,
+              UNIQUE(source_year, source_class)
+            )
+          `);
+
+          // Create indexes
+          await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_merges_source_year ON class_merges(source_year);
+            CREATE INDEX IF NOT EXISTS idx_merges_host_year ON class_merges(host_year);
+          `);
+
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      }
 
       // Mock data seeding disabled - add real students via admin interface
       console.log('Database ready. Add students through the admin interface.');
