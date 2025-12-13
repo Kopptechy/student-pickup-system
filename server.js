@@ -40,11 +40,16 @@ wss.on('connection', (ws, req) => {
                 ws.classKey = classKey;
                 console.log(`Client subscribed to ${classKey}`);
 
-                // Send current pending pickups for this class
-                const pendingPickups = await db.getPendingPickupsByClass(year, className);
+                // Send current pending pickups for this class (including merged source classes)
+                const pendingPickups = await db.getPendingPickupsForDisplay(year, className);
+
+                // Also get merge info to send to the display
+                const sourceClasses = await db.getSourceClasses(year, className);
+
                 ws.send(JSON.stringify({
                     type: 'initial',
-                    pickups: pendingPickups
+                    pickups: pendingPickups,
+                    mergedClasses: sourceClasses
                 }));
             }
         } catch (error) {
@@ -83,6 +88,39 @@ function broadcastToClass(year, className, data) {
             }
         });
         console.log(`Broadcasted to ${classKey}: ${connections.size} clients`);
+    }
+}
+
+// Broadcast pickup to class AND any host class it's merged into
+async function broadcastToClassWithMerge(year, className, data) {
+    // First broadcast to the original class
+    broadcastToClass(year, className, data);
+
+    // Check if this class is merged into a host class
+    const hostClass = await db.getHostClass(year, className);
+    if (hostClass) {
+        // Also broadcast to the host class display
+        broadcastToClass(year, hostClass, data);
+        console.log(`Also broadcasted to host class: year${year}-${hostClass}`);
+    }
+}
+
+// Broadcast merge update to affected displays
+function broadcastMergeUpdate(year, hostClass, sourceClasses) {
+    const classKey = `year${year}-${hostClass}`;
+    const connections = classConnections.get(classKey);
+
+    if (connections) {
+        const message = JSON.stringify({
+            type: 'merge_update',
+            mergedClasses: sourceClasses
+        });
+        connections.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
+        });
+        console.log(`Sent merge update to ${classKey}`);
     }
 }
 
@@ -159,8 +197,8 @@ app.post('/api/pickups', async (req, res) => {
 
         await db.addPickup(pickupData);
 
-        // Broadcast to the specific class
-        broadcastToClass(year, className, {
+        // Broadcast to the specific class (and host class if merged)
+        await broadcastToClassWithMerge(year, className, {
             type: 'new_pickup',
             pickup: pickupData
         });
@@ -316,6 +354,106 @@ app.delete('/api/students', async (req, res) => {
     }
 });
 
+// ==================== CLASS MERGE API ROUTES ====================
+
+// Get all active merges
+app.get('/api/merges', async (req, res) => {
+    try {
+        const merges = await db.getActiveMerges();
+        res.json(merges);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get merges for a specific year
+app.get('/api/merges/:year', async (req, res) => {
+    try {
+        const { year } = req.params;
+        const merges = await db.getMergesForYear(parseInt(year));
+        res.json(merges);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create a new merge
+app.post('/api/merges', async (req, res) => {
+    try {
+        const { year, sourceClass, hostClass } = req.body;
+
+        // Validation: same year, different classes
+        if (sourceClass === hostClass) {
+            return res.status(400).json({ error: 'Source and host class cannot be the same' });
+        }
+
+        // Check if source is already merged
+        const existingSource = await db.isSourceClass(year, sourceClass);
+        if (existingSource) {
+            return res.status(400).json({ error: `${sourceClass} is already merged to another class` });
+        }
+
+        // Check if source is being used as a host
+        const sourceIsHost = await db.isHostClass(year, sourceClass);
+        if (sourceIsHost) {
+            return res.status(400).json({ error: `${sourceClass} is currently hosting another class and cannot be merged` });
+        }
+
+        // Check if host is already a source (merged elsewhere)
+        const hostIsSource = await db.isSourceClass(year, hostClass);
+        if (hostIsSource) {
+            return res.status(400).json({ error: `${hostClass} is merged elsewhere and cannot be a host` });
+        }
+
+        const merge = await db.createMerge(year, sourceClass, hostClass);
+
+        // Notify the host display about the merge
+        const sourceClasses = await db.getSourceClasses(year, hostClass);
+        broadcastMergeUpdate(year, hostClass, sourceClasses);
+
+        // Also send current pickups from source class to host display
+        const sourcePickups = await db.getPendingPickupsByClass(year, sourceClass);
+        for (const pickup of sourcePickups) {
+            broadcastToClass(year, hostClass, {
+                type: 'new_pickup',
+                pickup: pickup
+            });
+        }
+
+        res.json({ success: true, merge });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete a merge (un-merge)
+app.delete('/api/merges/:year/:sourceClass', async (req, res) => {
+    try {
+        const { year, sourceClass } = req.params;
+
+        // Get the host before deleting
+        const hostClass = await db.getHostClass(parseInt(year), sourceClass);
+
+        const deleted = await db.deleteMerge(parseInt(year), sourceClass);
+
+        if (!deleted) {
+            return res.status(404).json({ error: 'Merge not found' });
+        }
+
+        // Notify the host display that merge is removed
+        if (hostClass) {
+            const remainingSourceClasses = await db.getSourceClasses(parseInt(year), hostClass);
+            broadcastMergeUpdate(parseInt(year), hostClass, remainingSourceClasses);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ==================== SCHEDULED TASKS ====================
+
 // Clear old pickups (run daily)
 setInterval(async () => {
     try {
@@ -325,6 +463,40 @@ setInterval(async () => {
         console.error('Error clearing old pickups:', error);
     }
 }, 24 * 60 * 60 * 1000);
+
+// Auto-clear merges at 6 PM Nigerian time (WAT = UTC+1)
+// Check every minute if it's 6 PM
+let lastMergeClearDate = null;
+setInterval(async () => {
+    try {
+        const now = new Date();
+        // Nigerian time is UTC+1
+        const nigerianHour = (now.getUTCHours() + 1) % 24;
+        const today = now.toDateString();
+
+        // Clear at 6 PM (18:00) Nigerian time, once per day
+        if (nigerianHour === 18 && lastMergeClearDate !== today) {
+            const count = await db.clearAllMerges();
+            lastMergeClearDate = today;
+            console.log(`[6 PM Nigerian time] Auto-cleared ${count} class merges`);
+
+            // Broadcast to all connected displays that merges are cleared
+            classConnections.forEach((connections, classKey) => {
+                const message = JSON.stringify({
+                    type: 'merge_update',
+                    mergedClasses: []
+                });
+                connections.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(message);
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.error('Error auto-clearing merges:', error);
+    }
+}, 60 * 1000); // Check every minute
 
 // Initialize database and start server
 async function startServer() {
