@@ -269,6 +269,91 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Merge Classes Section */
+        .merge-section {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .merge-section h2 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .active-merges {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .merge-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: rgba(37, 99, 235, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .merge-item-text {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            font-weight: 600;
+        }
+
+        .merge-arrow {
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .unmerge-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: opacity var(--transition-fast);
+        }
+
+        .unmerge-btn:hover {
+            opacity: 0.8;
+        }
+
+        .merge-form {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr auto;
+            gap: var(--spacing-md);
+            align-items: end;
+        }
+
+        .merge-form .form-group {
+            margin-bottom: 0;
+        }
+
+        .no-merges {
+            color: var(--text-muted);
+            font-style: italic;
+            padding: var(--spacing-sm);
+        }
+
+        @media (max-width: 768px) {
+            .merge-form {
+                grid-template-columns: 1fr;
+            }
+
+            .merge-form .merge-arrow-label {
+                display: none;
+            }
+        }
     </style>
 </head>
 
@@ -312,6 +397,48 @@
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- Merge Classes Section -->
+        <div class="merge-section">
+            <h2>🔗 Merge Classes</h2>
+
+            <div class="active-merges">
+                <label class="form-label">Active Merges:</label>
+                <div id="activeMergesList">
+                    <div class="no-merges">No active merges</div>
+                </div>
+            </div>
+
+            <div class="merge-form" id="mergeForm">
+                <div class="form-group">
+                    <label class="form-label" for="mergeYearSelect">Year</label>
+                    <select id="mergeYearSelect" class="form-control">
+                        <option value="">Select Year...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="sourceClassSelect">Source Class</label>
+                    <select id="sourceClassSelect" class="form-control" disabled>
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+
+                <div class="merge-arrow-label" style="padding-bottom: 8px; font-size: 1.5rem; color: var(--primary);">→
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="hostClassSelect">Host Class</label>
+                    <select id="hostClassSelect" class="form-control" disabled>
+                        <option value="">Select...</option>
+                    </select>
+                </div>
+
+                <button type="button" class="btn btn-primary" id="mergeBtn" disabled>
+                    Merge Classes
+                </button>
+            </div>
         </div>
 
         <div class="queue-section">
@@ -580,9 +707,200 @@
         // Auto-refresh queue every 5 seconds
         setInterval(loadPendingPickups, 5000);
 
+        // ==================== MERGE FUNCTIONALITY ====================
+
+        let activeMerges = [];
+
+        // Load active merges
+        async function loadActiveMerges() {
+            try {
+                const response = await fetch('/api/merges');
+                activeMerges = await response.json();
+                renderActiveMerges();
+            } catch (error) {
+                console.error('Error loading merges:', error);
+            }
+        }
+
+        // Render active merges list
+        function renderActiveMerges() {
+            const container = document.getElementById('activeMergesList');
+
+            if (activeMerges.length === 0) {
+                container.innerHTML = '<div class="no-merges">No active merges</div>';
+                return;
+            }
+
+            container.innerHTML = activeMerges.map(merge => `
+                <div class="merge-item">
+                    <div class="merge-item-text">
+                        <span>Year ${merge.year} ${capitalize(merge.source_class)}</span>
+                        <span class="merge-arrow">→</span>
+                        <span>Year ${merge.year} ${capitalize(merge.host_class)}</span>
+                    </div>
+                    <button class="unmerge-btn" onclick="unmergeClass(${merge.year}, '${merge.source_class}')">
+                        ✕ Un-merge
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Populate merge year dropdown
+        async function populateMergeYears() {
+            try {
+                const response = await fetch('/api/years');
+                const years = await response.json();
+
+                const mergeYearSelect = document.getElementById('mergeYearSelect');
+                years.forEach(({ year }) => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = `Year ${year}`;
+                    mergeYearSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading years for merge:', error);
+            }
+        }
+
+        // When merge year is selected, load classes
+        document.getElementById('mergeYearSelect').addEventListener('change', async (e) => {
+            const year = e.target.value;
+            const sourceSelect = document.getElementById('sourceClassSelect');
+            const hostSelect = document.getElementById('hostClassSelect');
+
+            // Reset
+            sourceSelect.innerHTML = '<option value="">Select...</option>';
+            hostSelect.innerHTML = '<option value="">Select...</option>';
+            sourceSelect.disabled = !year;
+            hostSelect.disabled = !year;
+            updateMergeButton();
+
+            if (!year) return;
+
+            try {
+                const response = await fetch(`/api/classes/${year}`);
+                const classes = await response.json();
+
+                // Get current merges for this year to filter options
+                const yearMerges = activeMerges.filter(m => m.year === parseInt(year));
+                const usedSources = yearMerges.map(m => m.source_class);
+                const usedHosts = yearMerges.map(m => m.host_class);
+
+                classes.forEach(({ class: className }) => {
+                    // Add to source if not already used as source
+                    if (!usedSources.includes(className)) {
+                        const sourceOpt = document.createElement('option');
+                        sourceOpt.value = className;
+                        sourceOpt.textContent = capitalize(className);
+                        // Disable if it's a host
+                        if (usedHosts.includes(className)) {
+                            sourceOpt.disabled = true;
+                            sourceOpt.textContent += ' (hosting)';
+                        }
+                        sourceSelect.appendChild(sourceOpt);
+                    }
+
+                    // Add to host if not already used as source elsewhere
+                    if (!usedSources.includes(className)) {
+                        const hostOpt = document.createElement('option');
+                        hostOpt.value = className;
+                        hostOpt.textContent = capitalize(className);
+                        hostSelect.appendChild(hostOpt);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading classes for merge:', error);
+            }
+        });
+
+        // Update merge button state
+        function updateMergeButton() {
+            const year = document.getElementById('mergeYearSelect').value;
+            const source = document.getElementById('sourceClassSelect').value;
+            const host = document.getElementById('hostClassSelect').value;
+
+            const mergeBtn = document.getElementById('mergeBtn');
+            mergeBtn.disabled = !year || !source || !host || source === host;
+        }
+
+        document.getElementById('sourceClassSelect').addEventListener('change', updateMergeButton);
+        document.getElementById('hostClassSelect').addEventListener('change', updateMergeButton);
+
+        // Create merge
+        document.getElementById('mergeBtn').addEventListener('click', async () => {
+            const year = parseInt(document.getElementById('mergeYearSelect').value);
+            const sourceClass = document.getElementById('sourceClassSelect').value;
+            const hostClass = document.getElementById('hostClassSelect').value;
+
+            const mergeBtn = document.getElementById('mergeBtn');
+            mergeBtn.disabled = true;
+            mergeBtn.textContent = 'Merging...';
+
+            try {
+                const response = await fetch('/api/merges', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year, sourceClass, hostClass })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccessMessage(`Merged Year ${year} ${capitalize(sourceClass)} → ${capitalize(hostClass)}`);
+                    await loadActiveMerges();
+                    // Reset form
+                    document.getElementById('mergeYearSelect').value = '';
+                    document.getElementById('sourceClassSelect').innerHTML = '<option value="">Select...</option>';
+                    document.getElementById('hostClassSelect').innerHTML = '<option value="">Select...</option>';
+                    document.getElementById('sourceClassSelect').disabled = true;
+                    document.getElementById('hostClassSelect').disabled = true;
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error creating merge:', error);
+                alert('Failed to create merge');
+            }
+
+            mergeBtn.textContent = 'Merge Classes';
+            updateMergeButton();
+        });
+
+        // Un-merge a class
+        async function unmergeClass(year, sourceClass) {
+            if (!confirm(`Un-merge Year ${year} ${capitalize(sourceClass)}?`)) return;
+
+            try {
+                const response = await fetch(`/api/merges/${year}/${sourceClass}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showSuccessMessage(`Un-merged Year ${year} ${capitalize(sourceClass)}`);
+                    await loadActiveMerges();
+                } else {
+                    const result = await response.json();
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error un-merging:', error);
+                alert('Failed to un-merge');
+            }
+        }
+
+        // Auto-refresh merges every 10 seconds
+        setInterval(loadActiveMerges, 10000);
+
         // Initialize
         loadYears();
         loadPendingPickups();
+        populateMergeYears();
+        loadActiveMerges();
     </script>
 </body>
 
