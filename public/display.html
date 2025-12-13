@@ -270,9 +270,23 @@
         let ws = null;
         let pickups = [];
         let reconnectTimeout = null;
+        let mergedClasses = []; // Classes merged into this display
 
-        // Update class info
-        document.getElementById('classInfo').textContent = `Year ${year} ${className.charAt(0).toUpperCase() + className.slice(1)}`;
+        // Update class info header
+        function updateClassInfo() {
+            const classInfoEl = document.getElementById('classInfo');
+            const baseText = `Year ${year} ${className.charAt(0).toUpperCase() + className.slice(1)}`;
+
+            if (mergedClasses.length > 0) {
+                const mergedText = mergedClasses.map(c => c.charAt(0).toUpperCase() + c.slice(1)).join(' + ');
+                classInfoEl.textContent = `${baseText} + ${mergedText} (merged)`;
+            } else {
+                classInfoEl.textContent = baseText;
+            }
+        }
+
+        // Initial header
+        updateClassInfo();
 
         // WebSocket connection
         function connectWebSocket() {
@@ -297,18 +311,28 @@
                 switch (data.type) {
                     case 'initial':
                         pickups = data.pickups;
+                        mergedClasses = data.mergedClasses || [];
+                        updateClassInfo();
                         renderPickups();
                         break;
 
                     case 'new_pickup':
-                        pickups.push(data.pickup);
-                        renderPickups();
-                        playNotificationSound();
+                        // Avoid duplicates (can happen with merged classes)
+                        if (!pickups.find(p => p.id === data.pickup.id)) {
+                            pickups.push(data.pickup);
+                            renderPickups();
+                            playNotificationSound();
+                        }
                         break;
 
                     case 'pickup_acknowledged':
                         pickups = pickups.filter(p => p.id !== data.pickupId);
                         renderPickups();
+                        break;
+
+                    case 'merge_update':
+                        mergedClasses = data.mergedClasses || [];
+                        updateClassInfo();
                         break;
 
                     case 'heartbeat':
@@ -381,10 +405,17 @@
                     statusText = `🆕 ${waitTime} min${waitTime !== 1 ? 's' : ''}`;
                 }
 
+                // Show class badge if student is from a merged class
+                const showClassBadge = pickup.class !== className;
+                const classBadgeColor = getClassColor(pickup.class);
+                const classBadge = showClassBadge
+                    ? `<span class="class-badge" style="background: ${classBadgeColor}; color: white; padding: 2px 8px; border-radius: 8px; font-size: 0.7em; margin-left: 8px;">${pickup.year} ${pickup.class.charAt(0).toUpperCase() + pickup.class.slice(1)}</span>`
+                    : '';
+
                 return `
           <div class="pickup-card ${statusClass}" id="pickup-${pickup.id}">
             <div class="pickup-header">
-              <h2 class="student-name">${pickup.student_name}</h2>
+              <h2 class="student-name">${pickup.student_name}${classBadge}</h2>
               <div class="waiting-badge ${statusClass}">${statusText}</div>
             </div>
             <button class="btn btn-success btn-xl acknowledge-btn" onclick="acknowledgePickup('${pickup.id}')">
@@ -393,6 +424,16 @@
           </div>
         `;
             }).join('');
+        }
+
+        // Get color for class badge
+        function getClassColor(cls) {
+            const colors = {
+                'blue': '#2563eb',
+                'green': '#16a34a',
+                'red': '#dc2626'
+            };
+            return colors[cls] || '#6b7280';
         }
 
         // Acknowledge pickup
