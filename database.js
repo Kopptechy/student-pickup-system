@@ -47,14 +47,18 @@ class PickupDatabase {
       `);
 
       // Class merges table - for temporary class combinations
+      // Dropping table first to ensure schema update since this is a breaking change
+      await client.query('DROP TABLE IF EXISTS class_merges');
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS class_merges (
           id SERIAL PRIMARY KEY,
-          year INTEGER NOT NULL,
+          source_year INTEGER NOT NULL,
           source_class TEXT NOT NULL,
+          host_year INTEGER NOT NULL,
           host_class TEXT NOT NULL,
           created_at BIGINT NOT NULL,
-          UNIQUE(year, source_class)
+          UNIQUE(source_year, source_class)
         )
       `);
 
@@ -307,21 +311,21 @@ class PickupDatabase {
   // ==================== CLASS MERGE METHODS ====================
 
   // Create a new merge (source class → host class)
-  async createMerge(year, sourceClass, hostClass) {
+  async createMerge(sourceYear, sourceClass, hostYear, hostClass) {
     const result = await this.pool.query(
-      `INSERT INTO class_merges (year, source_class, host_class, created_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO class_merges (source_year, source_class, host_year, host_class, created_at)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [year, sourceClass, hostClass, Date.now()]
+      [sourceYear, sourceClass, hostYear, hostClass, Date.now()]
     );
     return result.rows[0];
   }
 
-  // Delete a merge
-  async deleteMerge(year, sourceClass) {
+  // Delete a merge from a specific source
+  async deleteMerge(sourceYear, sourceClass) {
     const result = await this.pool.query(
-      'DELETE FROM class_merges WHERE year = $1 AND source_class = $2 RETURNING *',
-      [year, sourceClass]
+      'DELETE FROM class_merges WHERE source_year = $1 AND source_class = $2 RETURNING *',
+      [sourceYear, sourceClass]
     );
     return result.rows[0];
   }
@@ -329,42 +333,42 @@ class PickupDatabase {
   // Get all active merges
   async getActiveMerges() {
     const result = await this.pool.query(
-      'SELECT * FROM class_merges ORDER BY year, source_class'
+      'SELECT * FROM class_merges ORDER BY created_at DESC'
     );
     return result.rows;
   }
 
-  // Get merges for a specific year
+  // Get merges where the source is in a specific year
   async getMergesForYear(year) {
     const result = await this.pool.query(
-      'SELECT * FROM class_merges WHERE year = $1 ORDER BY source_class',
+      'SELECT * FROM class_merges WHERE source_year = $1 ORDER BY source_class',
       [year]
     );
     return result.rows;
   }
 
-  // Check if a class is merged as source, return host class if so
+  // Check if a class is merged as source, return host info if so
   async getHostClass(year, className) {
     const result = await this.pool.query(
-      'SELECT host_class FROM class_merges WHERE year = $1 AND source_class = $2',
+      'SELECT host_year, host_class FROM class_merges WHERE source_year = $1 AND source_class = $2',
       [year, className]
     );
-    return result.rows[0]?.host_class || null;
+    return result.rows[0] || null;
   }
 
-  // Get all source classes merged into a host
+  // Get all source classes merged into a host class
   async getSourceClasses(year, hostClass) {
     const result = await this.pool.query(
-      'SELECT source_class FROM class_merges WHERE year = $1 AND host_class = $2',
+      'SELECT source_year, source_class FROM class_merges WHERE host_year = $1 AND host_class = $2',
       [year, hostClass]
     );
-    return result.rows.map(row => row.source_class);
+    return result.rows;
   }
 
-  // Check if a class is being used as a host
+  // Check if a class is being used as a host in a specific year
   async isHostClass(year, className) {
     const result = await this.pool.query(
-      'SELECT COUNT(*) FROM class_merges WHERE year = $1 AND host_class = $2',
+      'SELECT COUNT(*) FROM class_merges WHERE host_year = $1 AND host_class = $2',
       [year, className]
     );
     return parseInt(result.rows[0].count) > 0;
@@ -373,7 +377,7 @@ class PickupDatabase {
   // Check if a class is already a source (merged elsewhere)
   async isSourceClass(year, className) {
     const result = await this.pool.query(
-      'SELECT COUNT(*) FROM class_merges WHERE year = $1 AND source_class = $2',
+      'SELECT COUNT(*) FROM class_merges WHERE source_year = $1 AND source_class = $2',
       [year, className]
     );
     return parseInt(result.rows[0].count) > 0;
@@ -385,20 +389,38 @@ class PickupDatabase {
     return result.rowCount;
   }
 
-  // Get pending pickups for a class INCLUDING merged source classes
+  // Get pending pickups for a display (including merged classes from any year)
   async getPendingPickupsForDisplay(year, className) {
-    // Get source classes merged into this host
-    const sourceClasses = await this.getSourceClasses(year, className);
+    // Logic: Get pickups that are EITHER:
+    // 1. Direct match: pickup.year = year AND pickup.class = className AND NOT merged away
+    //    (Actually, if it's merged away, it shouldn't show here? But requirement says redirect. 
+    //     Usually source display doesn't show it if redirected. But let's stick to "host shows it".)
+    // 2. Merged match: pickup is from a source class that is merged into THIS class
 
-    // Include both the host class and any source classes
-    const allClasses = [className, ...sourceClasses];
+    // Note: If a student is in a class that is merged AWAY, should it still show on the original display?
+    // Usually "Merge" implies "Moved". So it shouldn't show on source.
+    // But for simplicity/safety, we often leave it on both or just host.
+    // The previous implementation showed on host. Source display behavior wasn't explicitly preventing it 
+    // unless we filter it out. 
+    // Let's ensure the current display (host) gets everything destined for it.
 
-    const result = await this.pool.query(
-      `SELECT * FROM pickups 
-       WHERE status = 'pending' AND year = $1 AND class = ANY($2)
-       ORDER BY timestamp`,
-      [year, allClasses]
-    );
+    const query = `
+      SELECT p.* 
+      FROM pickups p
+      LEFT JOIN class_merges m ON p.year = m.source_year AND p.class = m.source_class
+      WHERE 
+        p.status = 'pending' 
+        AND (
+          -- Item is for this class directly (and not merged away? optional, but simpler to just show what's targeting here)
+          (p.year = $1 AND p.class = $2) 
+          OR 
+          -- Item is from a source class merged into this class
+          (m.host_year = $1 AND m.host_class = $2)
+        )
+      ORDER BY p.timestamp ASC
+    `;
+
+    const result = await this.pool.query(query, [year, className]);
     return result.rows;
   }
 }
