@@ -64,7 +64,8 @@ class PickupDatabase {
 
       // Create index for class merges
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_merges_year ON class_merges(year);
+        CREATE INDEX IF NOT EXISTS idx_merges_source_year ON class_merges(source_year);
+        CREATE INDEX IF NOT EXISTS idx_merges_host_year ON class_merges(host_year);
       `);
 
       // Mock data seeding disabled - add real students via admin interface
