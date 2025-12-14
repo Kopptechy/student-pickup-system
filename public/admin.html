@@ -288,7 +288,17 @@
                     <option value="">All Classes</option>
                 </select>
                 <button class="btn btn-primary" onclick="openAddStudentModal()">+ Add Student</button>
-                <button class="btn btn-success" onclick="openBatchUploadModal()">📋 Batch Upload</button>
+                <div
+                    style="display: inline-flex; gap: 0.5rem; border-left: 2px solid var(--border); padding-left: 0.5rem; margin-left: 0.5rem;">
+                    <button class="btn btn-success" onclick="openBatchUploadModal()">📋 Batch List</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('csvFileInput').click()">📤
+                        Import CSV</button>
+                    <button class="btn btn-secondary" onclick="downloadStudents()">📥 Download CSV</button>
+                </div>
+                <!-- Hidden file input for CSV import -->
+                <input type="file" id="csvFileInput" accept=".csv" style="display: none;"
+                    onchange="importStudents(this)">
+
                 <button class="btn btn-warning" onclick="deleteSelected()" id="deleteSelectedBtn"
                     style="display:none;">🗑️ Delete Selected (<span id="selectedCount">0</span>)</button>
                 <button class="btn btn-danger" onclick="deleteAllStudents()">🗑️ Delete All</button>
@@ -317,7 +327,7 @@
         <!-- History Tab -->
         <div id="historyTab" class="tab-content">
             <div class="filter-bar" style="justify-content: flex-end; margin-bottom: 1rem;">
-                <button class="btn btn-success" onclick="downloadHistory()">📥 Download CSV</button>
+                <button class="btn btn-success" onclick="downloadHistory()">📥 Download History CSV</button>
             </div>
             <div class="table-container">
                 <table>
@@ -337,6 +347,19 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Overlay -->
+    <div id="importOverlay" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="text-align: center; max-width: 400px;">
+            <h2>Importing Students</h2>
+            <p id="importStatus">Processing...</p>
+            <div
+                style="background: var(--bg-dark); height: 10px; border-radius: 5px; margin: 1rem 0; overflow: hidden;">
+                <div id="importProgress"
+                    style="width: 0%; height: 100%; background: var(--success); transition: width 0.3s;"></div>
             </div>
         </div>
     </div>
@@ -392,7 +415,7 @@
     <div id="batchUploadModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header">
-                <h2>📋 Batch Upload Students</h2>
+                <h2>📋 Batch List Upload</h2>
                 <button class="close-btn" onclick="closeBatchUploadModal()">×</button>
             </div>
 
@@ -461,6 +484,148 @@ Sophia Davis
             }
         }
 
+        // ==================== CSV IMPORT/EXPORT ====================
+
+        // Download Students CSV
+        function downloadStudents() {
+            if (students.length === 0) {
+                alert('No students to download.');
+                return;
+            }
+
+            // Sort by Year -> Class -> Name
+            const sortedStudents = [...students].sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                if (a.class !== b.class) return a.class.localeCompare(b.class);
+                return a.name.localeCompare(b.name);
+            });
+
+            // Create CSV Content
+            const headers = ['Name', 'Year', 'Class'];
+            const rows = sortedStudents.map(s => [
+                `"${s.name}"`, // Quote names to handle commas
+                s.year,
+                s.class
+            ]);
+
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(r => r.join(','))
+            ].join('\n');
+
+            // Trigger Download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'students_list.csv');
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Import Students CSV
+        async function importStudents(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            // Reset input so same file can be selected again if needed
+            input.value = '';
+
+            const reader = new FileReader();
+            reader.onload = async function (e) {
+                const text = e.target.result;
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+                if (lines.length < 2) {
+                    alert('CSV file is empty or missing data (requires Header + Data).');
+                    return;
+                }
+
+                // Parse Headers (Simple check)
+                const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+                const nameIndex = headers.indexOf('name');
+                const yearIndex = headers.indexOf('year');
+                const classIndex = headers.indexOf('class');
+
+                if (nameIndex === -1 || yearIndex === -1 || classIndex === -1) {
+                    alert('Invalid CSV Format. Headers must be: Name, Year, Class');
+                    return;
+                }
+
+                // Parse Data
+                const studentsToUpload = [];
+                for (let i = 1; i < lines.length; i++) {
+                    // Simple CSV parser (doesn't handle commas within quotes perfectly without regex, but good enough for simple names)
+                    // Better approach: use regex to split by comma ignoring quotes
+                    const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+
+                    if (row.length < 3) continue;
+
+                    let name = row[nameIndex].replace(/^"|"$/g, '').trim();
+                    // Fallback cleanup if regex failed slightly
+                    name = name.replace(/,/g, '');
+
+                    let year = parseInt(row[yearIndex].replace(/^"|"$/g, '').trim());
+                    let className = row[classIndex].replace(/^"|"$/g, '').trim().toLowerCase();
+
+                    if (name && year && className) {
+                        studentsToUpload.push({ name, year, class: className });
+                    }
+                }
+
+                if (studentsToUpload.length === 0) {
+                    alert('No valid student data found.');
+                    return;
+                }
+
+                if (!confirm(`Found ${studentsToUpload.length} students to import.\n\nProceed?`)) {
+                    return;
+                }
+
+                // Upload Logic with Progress UI
+                const overlay = document.getElementById('importOverlay');
+                const progressBar = document.getElementById('importProgress');
+                const statusText = document.getElementById('importStatus');
+
+                overlay.classList.add('active');
+                let successCount = 0;
+                let failCount = 0;
+
+                for (let i = 0; i < studentsToUpload.length; i++) {
+                    const student = studentsToUpload[i];
+                    const percent = Math.round(((i + 1) / studentsToUpload.length) * 100);
+                    progressBar.style.width = percent + '%';
+                    statusText.textContent = `Uploading ${i + 1}/${studentsToUpload.length}: ${student.name}`;
+
+                    try {
+                        const response = await fetch('/api/students', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(student)
+                        });
+
+                        if (response.ok) successCount++;
+                        else failCount++;
+                    } catch (err) {
+                        failCount++;
+                        console.error(err);
+                    }
+                }
+
+                setTimeout(() => {
+                    overlay.classList.remove('active');
+                    alert(`Import Complete!\n\n✅ Success: ${successCount}\n❌ Failed: ${failCount}`);
+                    loadStudents();
+                }, 500);
+            };
+
+            reader.readAsText(file);
+        }
+
         // Load students
         async function loadStudents() {
             try {
@@ -523,12 +688,21 @@ Sophia Davis
           <td>${student.class.charAt(0).toUpperCase() + student.class.slice(1)}</td>
           <td class="action-buttons">
             <button class="btn btn-primary btn-sm" onclick="editStudent(${student.id})">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${student.name}')">Delete</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelected(${student.id})">Delete</button>
           </td>
         </tr>
       `).join('');
 
             updateSelectedCount();
+        }
+
+        // Correct delete function for individual button (renamed param to avoid conflict)
+        async function deleteStudent(id, name) {
+            if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+            try {
+                await fetch(`/api/students/${id}`, { method: 'DELETE' });
+                loadStudents();
+            } catch (e) { alert('Failed'); }
         }
 
         // Open add student modal
